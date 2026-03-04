@@ -1,131 +1,186 @@
 # computational-geometry-cgal
 
-**Author:** Abel Albuez Sanchez
+**Autor:** Abel Albuez Sanchez
 
 ---
 
-## Description
+## Descripción
 
-This academic project focuses on **geometric intersection** of line segments and polygons. It compares a **manual implementation** (no external geometry library) with implementations using **CGAL** (Computational Geometry Algorithms Library), and extends the base code provided by the course instructor.
-
-Main goals:
-
-- **Segment intersection:** compute intersections between line segments from input data.
-- **Comparison:** contrast manual (brute-force) algorithms with CGAL-based solutions.
-- **Extensibility:** serve as a base for further work (e.g. convex polygon intersection in the workshop).
+Proyecto académico de geometría computacional que implementa **intersección de segmentos y polígonos convexos** en C++ con CGAL. Compara una implementación manual (Sutherland-Hodgman) con la solución nativa de CGAL.
 
 ---
 
-## Project Structure
+## Estructura del proyecto
 
 ```
 computational-geometry-cgal/
 ├── src/
 │   ├── no_cgal/
-│   │   └── brute_force.cxx
+│   │   └── brute_force.cxx              — intersección sin CGAL
 │   ├── polygon_intersection/
-│   │   ├── compare.cxx
-│   │   ├── brute_force.cxx
-│   │   └── brute_force_2.cxx
+│   │   ├── compare.cxx                  — compara BruteForce vs BentleyOttmann
+│   │   ├── brute_force.cxx              — fuerza bruta standalone
+│   │   ├── brute_force_2.cxx            — fuerza bruta usando pujCGAL/IO
+│   │   ├── main.cxx                     — [TALLER] Sutherland-Hodgman manual
+│   │   └── main_cgal.cxx                — [TALLER] intersección con CGAL nativo
 │   └── cgal/
 │       ├── compare.cxx
 │       ├── brute_force.cxx
 │       └── brute_force_2.cxx
 ├── lib/
 │   └── pujCGAL/
-│       ├── SegmentsIntersection.h
-│       ├── SegmentsIntersection.hxx
-│       ├── IO.h
-│       └── IO.hxx
+│       ├── SegmentsIntersection.h / .hxx
+│       └── IO.h / .hxx
 ├── data/
-│   ├── input_00.obj
-│   ├── input_01.obj
-│   ├── input_02.obj
-│   ├── input_03.obj
-│   └── *_intersections.obj
+│   ├── input_00.obj .. input_03.obj     — segmentos de prueba del profesor
+│   ├── poly_P.obj                       — [TALLER] polígono P de prueba
+│   └── poly_Q.obj                       — [TALLER] polígono Q de prueba
 ├── CMakeLists.txt
-├── baseConf.cmake
-├── LICENSE
-└── README.md
+└── baseConf.cmake
 ```
 
-- **`src/no_cgal/`** — implementations without CGAL (manual segment intersection).
-- **`src/polygon_intersection/`** — polygon-related intersection code (compare and brute-force variants).
-- **`src/cgal/`** — CGAL-based segment intersection (compare and brute-force variants).
-- **`lib/pujCGAL/`** — shared headers for segment intersection and I/O (`.obj` read/write).
-- **`data/`** — sample inputs (`input_XX.obj`) and optional intersection outputs (`*_intersections.obj`).
+---
+
+## Requisitos
+
+- **C++23** (configurado en `baseConf.cmake`)
+- **CMake** ≥ 3.6
+- **CGAL** con componente Core
+- **Boost** (requerido por CGAL)
+- **GMP y MPFR** (requeridos por el kernel exacto de CGAL)
+
+### Instalación de dependencias
+
+**Ubuntu / Debian:**
+```bash
+sudo apt-get install cmake libcgal-dev libgmp-dev libmpfr-dev libboost-all-dev
+```
+
+**macOS:**
+```bash
+brew install cmake cgal boost gmp mpfr
+```
 
 ---
 
-## Requirements
-
-- **C++17** or later (project is configured for C++23 in `baseConf.cmake`).
-- **CMake** ≥ 3.6.
-- **CGAL** (with Core component).
-- **Boost** (required by CGAL).
-
----
-
-## Build Instructions
-
-From the project root:
+## Compilar
 
 ```bash
-cd computational-geometry-cgal
+# Desde la raíz del proyecto
 mkdir build
 cd build
 cmake ..
 make
 ```
 
-Generated executables are placed in the **`build`** directory (same as the binary tree). Typical names include targets such as `no_cgal_brute_force`, `cgal_brute_force`, `cgal_brute_force_2`, and `cgal_compare`, depending on the CMake configuration.
+Los ejecutables quedan en `build/`.
 
----
-
-## Running the Executables
-
-Run any binary from the `build` directory:
-
+Para compilar solo un target específico:
 ```bash
-cd build
-./<executable_name>
+make polygon_intersection
+make polygon_intersection_cgal
 ```
 
-To use the sample data as input, pass the path to an `.obj` file. For example, if running from `build`:
+---
+
+## Ejecutables del taller
+
+### `polygon_intersection` — Sutherland-Hodgman manual
+
+Calcula la intersección de dos polígonos convexos usando el algoritmo de recorte por semiplanos.
 
 ```bash
-./<executable_name> ../data/input_00.obj
+./polygon_intersection <poligono_P.obj> <poligono_Q.obj> <salida.obj>
 ```
 
-Input `.obj` files use a simple format: lines starting with `v` define 2D vertices, and lines starting with `l` define segments by vertex indices. Output intersection results may be written as `*_intersections.obj` in the same format.
+**Ejemplo:**
+```bash
+./polygon_intersection ../data/poly_P.obj ../data/poly_Q.obj ../data/result.obj
+```
 
 ---
 
-## Troubleshooting
+### `polygon_intersection_cgal` — CGAL nativo
 
-### CGAL not found
+Misma operación usando `CGAL::Polygon_2` y `CGAL::intersection` con kernel de aritmética exacta.
 
-- Install CGAL and its dependencies (Boost, GMP, MPFR). On macOS: `brew install cgal`. On Ubuntu/Debian: `sudo apt-get install libcgal-dev`.
-- Ensure CMake can find CGAL (e.g. set `CGAL_DIR` if you use a non-standard installation).
+```bash
+./polygon_intersection_cgal <poligono_P.obj> <poligono_Q.obj> <salida.obj>
+```
 
-### Boost linking issues
-
-- CGAL depends on Boost. Install Boost (e.g. `brew install boost` or `sudo apt-get install libboost-all-dev`) and ensure it is visible to CMake.
-- If linking fails, check that the same compiler and standard library are used for Boost and CGAL.
-
-### CMake errors
-
-- Do not run CMake from the project root as the build directory; use a separate `build` folder (e.g. `mkdir build && cd build && cmake ..`). The project explicitly disallows in-source builds.
-- If the C++ standard or compiler is wrong, adjust `baseConf.cmake` or pass `-DCMAKE_CXX_STANDARD=17` (or higher) when configuring.
+**Ejemplo:**
+```bash
+./polygon_intersection_cgal ../data/poly_P.obj ../data/poly_Q.obj ../data/result_cgal.obj
+```
 
 ---
 
-## Workshop Note
+## Formato de los archivos `.obj`
 
-The workshop will extend this codebase to implement **intersection of convex polygons** using CGAL. The current structure (segment intersection, I/O, and CGAL usage) is intended as a base for that task.
+Los archivos de entrada y salida usan un subconjunto del formato OBJ:
+
+```
+# comentario
+v 0 0       ← vértice 2D (x y)
+v 2 0
+v 2 2
+v 0 2
+l 1 2       ← arista: índice base-1
+l 2 3
+l 3 4
+l 4 1
+```
+
+Los vértices deben estar en orden **CCW (antihorario)** para que el predicado de semiplano funcione correctamente.
 
 ---
 
-## License
+## Casos manejados
 
-See the [LICENSE](LICENSE) file in the project root.
+| Caso | Resultado esperado |
+|---|---|
+| Intersección parcial | Polígono convexo recortado |
+| Sin intersección | 0 vértices (archivo vacío) |
+| P contenido en Q | Devuelve P completo |
+| Q contenido en P | Devuelve Q completo |
+
+---
+
+## Otros ejecutables del proyecto base
+
+```bash
+# Fuerza bruta sin CGAL
+./no_cgal_brute_force <input.obj> <output.obj>
+
+# Fuerza bruta con CGAL
+./cgal_brute_force <input.obj> <output.obj>
+
+# Comparar BruteForce vs BentleyOttmann
+./cgal_compare <input.obj> <bf_output.obj> <bo_output.obj>
+```
+
+---
+
+## Solución de problemas
+
+**CGAL no encontrado:**
+```bash
+# Ubuntu
+sudo apt-get install libcgal-dev
+# o pasar la ruta manualmente
+cmake .. -DCGAL_DIR=/ruta/a/cgal
+```
+
+**Error de GMP / MPFR al compilar `polygon_intersection_cgal`:**
+```bash
+sudo apt-get install libgmp-dev libmpfr-dev
+```
+
+**Error de in-source build:**
+No ejecutar `cmake` desde la raíz del proyecto. Siempre usar un directorio `build/` separado.
+
+---
+
+## Licencia
+
+Ver el archivo [LICENSE](LICENSE) en la raíz del proyecto.

@@ -160,9 +160,6 @@ triangulate(
     } // end for
 
     // Last vertex
-    if( s.size( ) > 2 )
-    {
-      s.pop( );
       while( s.size( ) > 1 )
       {
         auto st = s.top( );
@@ -173,7 +170,6 @@ triangulate(
           std::get< 1 >( *vIt ), std::get< 1 >( st ), std::get< 1 >( sb )
           );
       } // end while
-    } // end if
   }
   else if( M.size( ) == 3 )
     T.add_triangle( M[ 0 ], M[ 1 ], M[ 2 ] );

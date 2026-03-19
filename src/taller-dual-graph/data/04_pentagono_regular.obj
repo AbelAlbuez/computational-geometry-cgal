@@ -1,0 +1,9 @@
+# Pentagono regular CCW - convexo, 3 triangulos
+# Vertices: 5 | Area: 38.0423 | Orientacion: CCW (area positiva)
+o polygon
+v 4.0000 8.0000 0.0000
+v 0.1958 5.2361 0.0000
+v 1.6489 0.7639 0.0000
+v 6.3511 0.7639 0.0000
+v 7.8042 5.2361 0.0000
+f 1 2 3 4 5

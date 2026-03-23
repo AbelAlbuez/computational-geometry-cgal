@@ -1,8 +1,0 @@
-# Cuadrado CCW - convexo simple, 2 triangulos en triangulacion
-# Vertices: 4 | Area: 16.0000 | Orientacion: CCW (area positiva)
-o polygon
-v 0.0000 0.0000 0.0000
-v 4.0000 0.0000 0.0000
-v 4.0000 4.0000 0.0000
-v 0.0000 4.0000 0.0000
-f 1 2 3 4

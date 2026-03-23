@@ -1,0 +1,10 @@
+# Forma L CCW - concava con 1 vertice reflex, 4 triangulos
+# Vertices: 6 | Area: 12.0000 | Orientacion: CCW (area positiva)
+o polygon
+v 0.0000 0.0000 0.0000
+v 4.0000 0.0000 0.0000
+v 4.0000 2.0000 0.0000
+v 2.0000 2.0000 0.0000
+v 2.0000 4.0000 0.0000
+v 0.0000 4.0000 0.0000
+f 1 2 3 4 5 6

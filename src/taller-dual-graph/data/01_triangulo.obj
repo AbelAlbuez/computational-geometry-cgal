@@ -1,0 +1,7 @@
+# Triangulo CCW - caso base minimo, produce 1 solo triangulo
+# Vertices: 3 | Area: 10.0000 | Orientacion: CCW (area positiva)
+o polygon
+v 0.0000 0.0000 0.0000
+v 5.0000 0.0000 0.0000
+v 2.5000 4.0000 0.0000
+f 1 2 3

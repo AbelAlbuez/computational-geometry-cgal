@@ -1,0 +1,9 @@
+# Flecha CCW - 1 vertice reflex muy pronunciado, 3 triangulos
+# Vertices: 5 | Area: 18.0000 | Orientacion: CCW (area positiva)
+o polygon
+v 0.0000 0.0000 0.0000
+v 6.0000 0.0000 0.0000
+v 6.0000 4.0000 0.0000
+v 3.0000 2.0000 0.0000
+v 0.0000 4.0000 0.0000
+f 1 2 3 4 5

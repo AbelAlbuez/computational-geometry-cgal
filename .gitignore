@@ -45,3 +45,6 @@ docs/
 
 # debug information files
 *.dwo
+
+# macOS
+.DS_Store

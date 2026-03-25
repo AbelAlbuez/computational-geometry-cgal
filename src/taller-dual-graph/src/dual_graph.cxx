@@ -1,10 +1,11 @@
 // =========================================================================
 // Taller 2 — Grafo Dual de un Polígono Simple
-// Paso 1: Cálculo de baricentros de la triangulación
+// Uso: ./dual_graph input.obj triangulation.obj dual.obj
+// @author Santiago Gil Gallego (santiago_gil@javeriana.edu.co)
+// @author Abel albueez (aa-albuezs@javeriana.edu.co)
 // =========================================================================
 
 #include <iostream>
-#include <fstream>
 #include <vector>
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
@@ -12,59 +13,87 @@
 #include <pujCGAL/IO.h>
 #include <pujCGAL/Polygon.h>
 #include <pujCGAL/Triangulation.h>
+#include <pujCGAL/DualGraph.h>
+#include <pujCGAL/IO_DualGraph.h>
 
 int main( int argc, char** argv )
 {
   using TKernel        = CGAL::Exact_predicates_inexact_constructions_kernel;
   using TPolygon       = pujCGAL::Polygon< TKernel >;
   using TTriangulation = pujCGAL::Triangulation< TKernel >;
+  using TDualGraph     = pujCGAL::DualGraph< TKernel >;
   using TPoint         = TKernel::Point_2;
 
-  // -- Leer polígono
-  TPolygon polygon;
+  TPolygon       polygon;
   TTriangulation mesh;
+  TDualGraph     dual;
+
+  // -- a. Lee polígono
   pujCGAL::IO::read( argv[ 1 ], polygon );
 
-  std::cout << "Area = " << polygon.area( ) << std::endl;
+  // -- b. asegura: CCW orientation
   polygon.guarantee_CCW( );
-  std::cout << "Area CCW = " << polygon.area( ) << std::endl;
 
-  // -- Triangular
+  // -- c. Triangula
   pujCGAL::triangulate( mesh, polygon );
 
-  // -- Calcular baricentros
-  std::vector< TPoint > barycenters;
-  std::size_t tri_idx = 0;
+  // -- d. guarda triangulacion
+  pujCGAL::IO::save( argv[ 2 ], mesh );
 
-  for( auto tIt = mesh.topology_begin( );
-            tIt != mesh.topology_end( ); ++tIt, ++tri_idx )
+  // -- e. Computa los: barycenters
+  std::vector< TPoint > barycenters;
+  for(
+    auto tIt = mesh.topology_begin( );
+    tIt != mesh.topology_end( );
+    ++tIt
+    )
   {
     const TPoint& pa = mesh.point( ( *tIt )[ 0 ] );
     const TPoint& pb = mesh.point( ( *tIt )[ 1 ] );
     const TPoint& pc = mesh.point( ( *tIt )[ 2 ] );
+    barycenters.push_back(
+      TPoint(
+        ( pa[ 0 ] + pb[ 0 ] + pc[ 0 ] ) / 3.0,
+        ( pa[ 1 ] + pb[ 1 ] + pc[ 1 ] ) / 3.0
+        )
+      );
+  } // end for
 
-    TPoint bary(
-      ( pa[ 0 ] + pb[ 0 ] + pc[ 0 ] ) / 3.0,
-      ( pa[ 1 ] + pb[ 1 ] + pc[ 1 ] ) / 3.0
-    );
+  // -- f. arma el grafo dual usando la funcion: build dual graph
+  pujCGAL::build_dual_graph( dual, mesh, barycenters );
 
-    barycenters.push_back( bary );
+  // -- g. guarda grafo dual
+  pujCGAL::IO::save( argv[ 3 ], dual );
 
-    std::cout << "Triangulo " << tri_idx
-              << " -> baricentro ("
-              << bary[ 0 ] << ", " << bary[ 1 ] << ")"
-              << std::endl;
-  }
+  // -- h. síntesis
+  std::size_t n_tri      = barycenters.size( );
+  std::size_t n_boundary = 0;
+  std::size_t n_internal = 0;
+  for( std::size_t i = 0; i < n_tri; ++i )
+  {
+    if( dual.is_boundary( i ) ) n_boundary++;
+    else                        n_internal++;
+  } // end for
 
-  std::cout << "Total triangulos: " << barycenters.size( ) << std::endl;
+  std::cout << "Triangulos        : " << n_tri      << std::endl;
+  std::cout << "  Frontera        : " << n_boundary << std::endl;
+  std::cout << "  Internos        : " << n_internal << std::endl;
+  std::cout << "Aristas internas  : " << dual.num_internal_edges( ) << std::endl;
+  std::cout << "Aristas externas  : " << dual.num_external_edges( ) << std::endl;
+  std::cout << "P-infinito        : ( "
+            << dual.point_infinity( )[ 0 ] << ", "
+            << dual.point_infinity( )[ 1 ] << " )" << std::endl;
 
-  // -- Escribir OBJ de salida con los baricentros como vertices
-  std::ofstream ofs( argv[ 2 ] );
-  ofs << "# Baricentros de la triangulacion" << std::endl;
-  ofs << "# Un vertice por triangulo" << std::endl;
-  for( const auto& b : barycenters )
-    ofs << "v " << b[ 0 ] << " " << b[ 1 ] << " 0" << std::endl;
-  ofs.close( );
+  std::size_t n_nodes = dual.num_nodes( );
+  std::cout << std::endl
+            << "Matriz de adyacencia ("
+            << n_nodes << " x " << n_nodes << "):" << std::endl;
+  for( std::size_t i = 0; i < n_nodes; ++i )
+  {
+    for( std::size_t j = 0; j < n_nodes; ++j )
+      std::cout << ( dual.adjacent( i, j ) ? 1 : 0 ) << " ";
+    std::cout << std::endl;
+  } // end for
 
   return( EXIT_SUCCESS );
 }

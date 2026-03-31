@@ -20,27 +20,41 @@ Implementación del algoritmo de grafo dual de un polígono simple. Dado un pol�
 
 ```
 taller-dual-graph/
-├── CMakeLists.txt          — build: dual_graph + visualizer (CGAL + VTK)
-├── requirements.txt        — dependencias Python (solo polygon_drawer)
+├── CMakeLists.txt              — build: dual_graph + visualizer (CGAL + VTK)
+├── requirements.txt            — dependencias Python (solo polygon_drawer.py)
+├── output/                     — carpetas auto-numeradas con los resultados
+│   ├── result-001/
+│   │   ├── 00_polygon.png
+│   │   ├── 01_triangulation.png
+│   │   ├── 02_barycenters.png
+│   │   ├── 03_internal_edges.png
+│   │   ├── 04_dual_complete.png
+│   │   └── dual_graph.gif      ← solo si se usó --gif
+│   └── result-002/ …
 ├── data/
 │   ├── 01_triangulo.obj
 │   ├── 02_cuadrado_ccw.obj
 │   ├── 03_cuadrado_cw.obj
-│   ├── …
+│   ├── 04_pentagono_regular.obj
+│   ├── 05_L.obj
+│   ├── 06_T.obj
+│   ├── 07_diente.obj
+│   ├── 08_flecha.obj
+│   ├── 09_escalera.obj
 │   ├── poly_00.obj
-│   └── poly_01.obj         — polígono de 21 vértices (dibujado con polygon_drawer)
+│   └── poly_01.obj             — polígono de 21 vértices (dibujado con polygon_drawer)
 ├── lib/
 │   └── pujCGAL/
 │       ├── Polygon.h / .hxx
 │       ├── Triangulation.h / .hxx
 │       ├── IO.h / .hxx
-│       ├── DualGraph.h / .hxx
-│       └── IO_DualGraph.h / .hxx
+│       ├── DualGraph.h / .hxx       ← implementación propia
+│       └── IO_DualGraph.h / .hxx   ← implementación propia
 └── src/
-    ├── triangulate.cxx     — referencia del profesor
-    ├── dual_graph.cxx      — triangulación + grafo dual → .obj
-    ├── visualizer.cxx      — VTK: ventana 3 capas + GIF (--gif) vía ffmpeg
-    └── polygon_drawer.py   — herramienta interactiva para dibujar polígonos (Python + VTK)
+    ├── triangulate.cxx         — referencia del profesor
+    ├── dual_graph.cxx          — ejecutable principal: triangula + construye grafo dual
+    ├── visualizer.cxx          — visualizador C++/VTK: PNGs + ventana interactiva + GIF
+    └── polygon_drawer.py       — herramienta Python/VTK para dibujar polígonos
 ```
 
 ---
@@ -52,8 +66,8 @@ taller-dual-graph/
 - CMake ≥ 3.14
 - C++17
 - CGAL
-- VTK ≥ 9.0 (visualizador)
-- **ffmpeg** en el PATH (solo para `./visualizer … --gif`)
+- VTK ≥ 9.0
+- **ffmpeg** en el PATH (solo para `--gif`)
 
 ```bash
 # Ubuntu / Debian
@@ -65,11 +79,35 @@ brew install cmake cgal gmp mpfr vtk ffmpeg
 
 ### Python (opcional — solo `polygon_drawer.py`)
 
+**Paso 1 — dependencias del sistema:**
+
+```bash
+# Ubuntu / Debian
+sudo apt-get install libpango1.0-dev libcairo2-dev pkg-config python3-dev python3-venv
+
+# macOS
+brew install pango cairo pkg-config
+```
+
+**Paso 2 — crear y activar el entorno virtual:**
+
 ```bash
 cd taller-dual-graph
 python3 -m venv .venv
-source .venv/bin/activate   # Linux / macOS
+source .venv/bin/activate    # Linux / macOS
+# .venv\Scripts\Activate.ps1  # Windows PowerShell
+```
+
+**Paso 3 — instalar dependencias:**
+
+```bash
 pip install -r requirements.txt
+```
+
+**Desactivar cuando termines:**
+
+```bash
+deactivate
 ```
 
 ---
@@ -83,7 +121,7 @@ cmake ..
 make dual_graph visualizer
 ```
 
-Ejecutables: `build/dual_graph`, `build/visualizer`.
+Los ejecutables quedan en `build/`.
 
 ---
 
@@ -91,8 +129,10 @@ Ejecutables: `build/dual_graph`, `build/visualizer`.
 
 ### 1. Dibujar un polígono (opcional)
 
+Si quieres crear un polígono nuevo en lugar de usar los de `data/`:
+
 ```bash
-source .venv/bin/activate   # si usas venv
+source .venv/bin/activate    # activar el venv
 cd src
 python polygon_drawer.py
 ```
@@ -117,34 +157,58 @@ Controles:
 ./build/dual_graph  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj
 ```
 
-**Salida:**
+El programa imprime en consola el número de triángulos, aristas y la matriz de adyacencia.
+
+Salidas:
 - `<triangulation.obj>` — triangulación CGAL del polígono
-- `<dual.obj>` — grafo dual: baricentros + P∞ + aristas (`v` y `l`)
+- `<dual.obj>` — grafo dual: baricentros + P∞ + aristas (formato `v` y `l`)
 
-### 3. Visualizar (VTK, ejecutable C++)
+### 3. Visualizar y generar imágenes
 
-Desde la raíz del taller (o ajusta rutas):
+El visualizador tiene tres modos:
+
+#### Modo por defecto — genera 5 PNGs
 
 ```bash
 ./build/visualizer  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj
 ```
 
-Controles:
-- `1` — mostrar/ocultar polígono
-- `2` — mostrar/ocultar triangulación
-- `3` — mostrar/ocultar grafo dual
-- `s` — captura → `screenshot_dual.png` (directorio de trabajo actual)
-- `q` / ESC — salir
+Crea automáticamente una carpeta nueva `output/result-NNN/` con 5 PNGs que
+muestran el proceso de construcción paso a paso:
 
-### 4. GIF de la secuencia (off-screen + ffmpeg)
+```
+output/result-001/
+├── 00_polygon.png          — polígono de entrada
+├── 01_triangulation.png    — + triangulación
+├── 02_barycenters.png      — + baricentros (nodos del dual)
+├── 03_internal_edges.png   — + aristas internas
+└── 04_dual_complete.png    — grafo dual completo
+```
 
-Genera unos cuantos fotogramas PNG en memoria de disco, llama a **ffmpeg** y escribe `dual_graph.gif` (y borra los PNG temporales si ffmpeg tuvo éxito).
+Cada ejecución crea una carpeta nueva (`result-002`, `result-003`, …) sin
+pisar los resultados anteriores.
+
+#### Modo `--gif` — PNGs + animación
 
 ```bash
 ./build/visualizer  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj  --gif
 ```
 
-Si `ffmpeg` no está instalado, quedan los archivos `dual_viz_frame_*.png` para unirlos a mano.
+Genera los mismos 5 PNGs más `dual_graph.gif` en la misma carpeta.
+Requiere `ffmpeg` instalado en el PATH.
+
+#### Modo `--interactive` — ventana VTK interactiva
+
+```bash
+./build/visualizer  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj  --interactive
+```
+
+Abre una ventana con las tres capas. Controles:
+- `1` — mostrar/ocultar polígono
+- `2` — mostrar/ocultar triangulación
+- `3` — mostrar/ocultar grafo dual
+- `s` — captura de pantalla → `screenshot_dual.png` (directorio actual)
+- `q` / ESC — salir
 
 ---
 
@@ -154,22 +218,28 @@ Los archivos de entrada usan el mismo subconjunto OBJ del resto del proyecto:
 
 ```
 # comentario
-v 0.0 0.0 0.0    ← vértice 2D (x y z, z suele ser 0)
+v 0.0 0.0 0.0    ← vértice 2D (x y z, z siempre 0)
 v 4.0 0.0 0.0
 v 4.0 4.0 0.0
 v 0.0 4.0 0.0
 f 1 2 3 4        ← cara (índices base 1)
 ```
 
-Los vértices deben estar en orden **CCW (antihorario)** cuando aplica. Si están en CW, `dual_graph` puede corregir con `guarantee_CCW()`.
+Los vértices deben estar en orden **CCW (antihorario)**. Si están en CW,
+`dual_graph` los invierte automáticamente con `guarantee_CCW()`.
 
-El archivo del grafo dual usa `v` para los baricentros (más P∞ como último vértice) y `l` para las aristas:
+El archivo del grafo dual usa `v` para los baricentros (P∞ como último
+vértice) y `l` para las aristas:
 
 ```
-# Dual graph: …
-v …
+# Dual graph: 4 nodes, 2 internal edges, 3 external edges
+v 3.33 2.00 0
+v 2.00 0.67 0
+v 0.67 2.00 0
+v 10.0 -6.00 0    ← P∞ (último vértice)
 l 1 2
-…
+l 2 3
+l 1 4
 ```
 
 ---
@@ -177,13 +247,18 @@ l 1 2
 ## Flujo completo de una sola vez
 
 ```bash
-cd taller-dual-graph
+# desde la raíz del taller
 mkdir -p build && cd build && cmake .. && make dual_graph visualizer && cd ..
-./build/dual_graph  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj
-./build/visualizer  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj
-```
 
-Para dibujar polígonos nuevos con Python, activa el venv e instala `requirements.txt` antes de `python polygon_drawer.py`.
+# calcular el grafo dual
+./build/dual_graph  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj
+
+# generar PNGs (modo por defecto)
+./build/visualizer  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj
+
+# generar PNGs + GIF
+./build/visualizer  data/poly_01.obj  build/out_triang.obj  build/out_dual.obj  --gif
+```
 
 ---
 
@@ -192,20 +267,28 @@ Para dibujar polígonos nuevos con Python, activa el venv e instala `requirement
 **CGAL no encontrado:**
 ```bash
 sudo apt-get install libcgal-dev
-# o: cmake .. -DCGAL_DIR=/ruta/a/cgal
+# o especificar la ruta:
+cmake .. -DCGAL_DIR=/ruta/a/cgal
 ```
 
-**VTK no encontrado (CMake):**
+**VTK no encontrado:**
 ```bash
+# Ubuntu
+sudo apt-get install libvtk9-dev
+# macOS
 brew install vtk
-# Ubuntu: sudo apt-get install libvtk9-dev
 ```
 
-**`--gif` no genera `dual_graph.gif`:**
-Instala `ffmpeg` y vuelve a ejecutar. Revisa mensajes en consola.
+**`--gif` falla o no genera el GIF:**
+Instala `ffmpeg` y asegúrate de que esté en el PATH:
+```bash
+which ffmpeg    # debe mostrar una ruta
+# si no: brew install ffmpeg  /  sudo apt-get install ffmpeg
+```
+Si ffmpeg falla, los PNGs quedan en `output/result-NNN/` y puedes unirlos manualmente.
 
 **Error de in-source build:**
-Usar siempre un directorio `build/` separado.
+No ejecutar `cmake` desde la raíz del taller. Usar siempre `build/` separado.
 
-**`ModuleNotFoundError: No module named 'vtk'` (polygon_drawer):**
-Activa el entorno virtual e instala `pip install -r requirements.txt`.
+**`polygon_drawer` no arranca (ModuleNotFoundError):**
+El venv no está activo. Ejecutar `source .venv/bin/activate` antes de correr cualquier script Python.

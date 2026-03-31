@@ -1,6 +1,9 @@
 # Build directory
 build/
 
+# Taller dual-graph: salidas del visualizer (result-NNN/, PNGs, GIF, concat ffmpeg)
+src/taller-dual-graph/output/
+
 # Docs / bitácora (personal notes, not for version control)
 docs/
 

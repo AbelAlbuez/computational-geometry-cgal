@@ -1,0 +1,9 @@
+# Taller 2 — Grafo Dual de un Polígono Simple
+# Dependencias Python (solo polygon_drawer.py)
+#
+# Instalación:
+#   pip install -r requirements.txt
+#
+# El visualizador de capas es el ejecutable C++ `visualizer` (VTK), no Python.
+
+vtk>=9.0

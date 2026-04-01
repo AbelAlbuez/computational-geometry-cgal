@@ -43,10 +43,17 @@ namespace
 {
   namespace fs = std::filesystem;
 
-  const char* OUTPUT_BASE =
-    "/Users/abelalbuez/Documents/Maestria/Tercer Semestre/"
-    "Geometria computacional/computational-geometry-cgal/"
-    "src/taller-dual-graph/output";
+  std::string
+  resolve_output_base( const char* argv0 )
+  {
+    // -- Intenta resolver relativo al ejecutable (build/../output)
+    fs::path exe = fs::weakly_canonical( fs::path( argv0 ) );
+    fs::path candidate = exe.parent_path( ) / ".." / "output";
+    if( fs::exists( candidate.parent_path( ) ) )
+      return( fs::weakly_canonical( candidate ).string( ) );
+    // -- Fallback: directorio de trabajo actual / output
+    return( ( fs::current_path( ) / "output" ).string( ) );
+  }
 
   using Vec2  = std::pair< double, double >;
   using Face  = std::vector< int >;
@@ -97,26 +104,26 @@ namespace
         continue;
       if( line[ 0 ] == '#' || line[ 0 ] == 'o' )
         continue;
-      char tok = line[ 0 ];
-      std::string rest = line.substr( 1 );
-      if( tok == 'v' )
+      if( line.size( ) < 3 )
+        continue;
+      if( line[ 0 ] == 'v' && line[ 1 ] == ' ' )
       {
-        std::istringstream iss( rest );
+        std::istringstream iss( line.substr( 2 ) );
         double x, y;
         iss >> x >> y;
         out.verts.push_back( { x, y } );
       }
-      else if( tok == 'l' )
+      else if( line[ 0 ] == 'l' && line[ 1 ] == ' ' )
       {
-        std::istringstream iss( rest );
+        std::istringstream iss( line.substr( 2 ) );
         int a, b;
         iss >> a >> b;
         out.edges.push_back( { a - 1, b - 1 } );
       }
-      else if( tok == 'f' )
+      else if( line[ 0 ] == 'f' && line[ 1 ] == ' ' )
       {
         Face f;
-        std::istringstream iss( rest );
+        std::istringstream iss( line.substr( 2 ) );
         int id;
         while( iss >> id )
           f.push_back( id - 1 );
@@ -519,6 +526,7 @@ namespace
 
   void
   run_output(
+    const char* argv0,
     const char* poly_path,
     const char* tri_path,
     const char* dual_path,
@@ -579,7 +587,8 @@ namespace
       set_actors_visible( dual_actors, 0 );
     };
 
-    std::string out_dir = next_result_dir( OUTPUT_BASE );
+    std::string output_base = resolve_output_base( argv0 );
+    std::string out_dir = next_result_dir( output_base.c_str( ) );
     std::cout << "Output: " << out_dir << "\n";
 
     auto out_png = [&]( const char* leaf ) {
@@ -713,7 +722,7 @@ main( int argc, char** argv )
   if( interactive )
     run_interactive( argv[ 1 ], argv[ 2 ], argv[ 3 ] );
   else
-    run_output( argv[ 1 ], argv[ 2 ], argv[ 3 ], make_gif );
+    run_output( argv[ 0 ], argv[ 1 ], argv[ 2 ], argv[ 3 ], make_gif );
 
   return( EXIT_SUCCESS );
 }

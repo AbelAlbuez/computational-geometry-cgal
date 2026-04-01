@@ -24,6 +24,13 @@ int main( int argc, char** argv )
   using TDualGraph     = pujCGAL::DualGraph< TKernel >;
   using TPoint         = TKernel::Point_2;
 
+  if( argc != 4 )
+  {
+    std::cerr << "Uso: " << argv[ 0 ]
+              << "  input.obj  triangulation.obj  dual.obj\n";
+    return( EXIT_FAILURE );
+  }
+
   TPolygon       polygon;
   TTriangulation mesh;
   TDualGraph     dual;

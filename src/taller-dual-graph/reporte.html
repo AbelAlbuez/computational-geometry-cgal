@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taller 2 &mdash; Grafo Dual de un Pol&iacute;gono Simple</title>
+<style>
+/* ===== reset & base ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f14;--bg2:#181820;--bg3:#22222e;
+  --fg:#e4e4ec;--fg2:#a0a0b8;
+  --accent:#5cb8ff;--accent2:#4bcc6a;--accent3:#e85454;
+  --yellow:#f0d64b;--orange:#ff6e3a;
+  --code-bg:#1a1a26;
+  --radius:10px;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--fg);
+  line-height:1.72;font-size:16.5px;
+}
+
+/* ===== layout ===== */
+.wrapper{max-width:960px;margin:0 auto;padding:0 24px 100px}
+header{
+  text-align:center;padding:64px 0 40px;
+  background:linear-gradient(170deg,#12121a 0%,#1a1a2e 100%);
+  border-bottom:1px solid #2a2a3a;
+}
+header h1{font-size:2.3rem;font-weight:700;letter-spacing:-.5px;color:#fff}
+header .subtitle{color:var(--fg2);margin-top:6px;font-size:1.05rem}
+header .authors{margin-top:18px;font-size:.92rem;color:var(--accent)}
+
+/* nav */
+nav.toc{
+  position:sticky;top:0;z-index:90;
+  background:var(--bg2);border-bottom:1px solid #2a2a3a;
+  padding:10px 0;backdrop-filter:blur(10px);
+}
+nav.toc ul{
+  display:flex;flex-wrap:wrap;gap:6px 16px;
+  list-style:none;justify-content:center;
+  max-width:960px;margin:0 auto;padding:0 16px;
+}
+nav.toc a{
+  color:var(--fg2);text-decoration:none;font-size:.82rem;
+  padding:4px 10px;border-radius:6px;transition:.2s;white-space:nowrap;
+}
+nav.toc a:hover,nav.toc a.active{color:#fff;background:var(--bg3)}
+
+/* sections */
+section{margin-top:56px}
+section h2{
+  font-size:1.55rem;font-weight:700;color:#fff;
+  padding-bottom:10px;border-bottom:2px solid var(--accent);
+  margin-bottom:22px;
+}
+section h3{font-size:1.18rem;color:var(--accent);margin:28px 0 12px}
+p{margin-bottom:14px;color:var(--fg)}
+ul,ol{margin:0 0 16px 24px;color:var(--fg)}
+li{margin-bottom:6px}
+strong{color:#fff}
+
+/* info boxes */
+.box{
+  background:var(--bg3);border-left:4px solid var(--accent);
+  border-radius:var(--radius);padding:16px 20px;margin:20px 0;
+}
+.box.warn{border-color:var(--yellow)}
+.box.algo{border-color:var(--accent2)}
+.box h4{font-size:.95rem;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;color:var(--accent)}
+.box.warn h4{color:var(--yellow)}
+.box.algo h4{color:var(--accent2)}
+
+/* code */
+pre{
+  background:var(--code-bg);border:1px solid #2a2a3a;
+  border-radius:var(--radius);padding:18px 20px;
+  overflow-x:auto;font-size:.85rem;line-height:1.6;
+  margin:16px 0;color:#c8c8d8;
+}
+code{font-family:'Cascadia Code','Fira Code','Consolas',monospace}
+pre code{color:inherit}
+.kw{color:#c792ea}.fn{color:#82aaff}.cm{color:#546e7a;font-style:italic}
+.tp{color:#ffcb6b}.st{color:#c3e88d}.nb{color:#f78c6c}
+
+/* figures / SVG containers */
+figure{
+  margin:24px 0;background:var(--bg2);
+  border:1px solid #2a2a3a;border-radius:var(--radius);
+  overflow:hidden;
+}
+figure svg{display:block;width:100%;height:auto}
+figcaption{
+  padding:10px 16px;font-size:.85rem;color:var(--fg2);
+  border-top:1px solid #2a2a3a;text-align:center;
+}
+
+/* step buttons */
+.step-controls{
+  display:flex;gap:10px;justify-content:center;
+  margin:18px 0 8px;flex-wrap:wrap;
+}
+.step-btn{
+  background:var(--bg3);color:var(--fg);border:1px solid #3a3a4a;
+  padding:7px 18px;border-radius:6px;cursor:pointer;font-size:.85rem;
+  transition:.2s;
+}
+.step-btn:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+.step-btn.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
+
+/* interactive canvas */
+#interactiveCanvas{
+  display:block;margin:0 auto;
+  background:var(--bg2);border-radius:var(--radius);
+  border:1px solid #2a2a3a;cursor:crosshair;
+}
+.canvas-info{text-align:center;font-size:.84rem;color:var(--fg2);margin:8px 0}
+
+/* matrix */
+.matrix-grid{
+  display:inline-grid;gap:1px;
+  background:#2a2a3a;border:1px solid #2a2a3a;border-radius:6px;
+  overflow:hidden;margin:12px 0;
+}
+.matrix-grid .cell{
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  font-size:.82rem;font-weight:600;font-family:monospace;
+}
+.cell.hdr{background:var(--bg3);color:var(--accent)}
+.cell.v1{background:#1a3a1a;color:var(--accent2)}
+.cell.v0{background:var(--bg);color:#444}
+
+/* table */
+table.files{
+  width:100%;border-collapse:collapse;margin:16px 0;font-size:.88rem;
+}
+table.files th{
+  text-align:left;padding:10px 12px;background:var(--bg3);
+  color:var(--accent);border-bottom:2px solid #3a3a4a;
+}
+table.files td{
+  padding:8px 12px;border-bottom:1px solid #2a2a3a;color:var(--fg);
+}
+table.files tr:hover td{background:var(--bg2)}
+
+/* footer */
+footer{
+  text-align:center;padding:40px 0;color:var(--fg2);
+  font-size:.85rem;border-top:1px solid #2a2a3a;margin-top:60px;
+}
+
+/* responsive */
+@media(max-width:700px){
+  header h1{font-size:1.6rem}
+  section h2{font-size:1.3rem}
+  .wrapper{padding:0 14px 60px}
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== HEADER ==================== -->
+<header>
+  <h1>Grafo Dual de un Pol&iacute;gono Simple</h1>
+  <div class="subtitle">Taller 2 &mdash; Geometr&iacute;a Computacional</div>
+  <div class="authors">
+    Abel Albuez S&aacute;nchez &middot; Santiago Gil Gallego<br>
+    Docente: Leonardo Fl&oacute;rez-Valencia &mdash; Pontificia Universidad Javeriana
+  </div>
+</header>
+
+<!-- ==================== NAV ==================== -->
+<nav class="toc" id="toc">
+  <ul>
+    <li><a href="#sec-intro">Introducci&oacute;n</a></li>
+    <li><a href="#sec-poligono">Pol&iacute;gono simple</a></li>
+    <li><a href="#sec-orientacion">Orientaci&oacute;n</a></li>
+    <li><a href="#sec-triangulacion">Triangulaci&oacute;n</a></li>
+    <li><a href="#sec-baricentros">Baricentros</a></li>
+    <li><a href="#sec-dual">Grafo dual</a></li>
+    <li><a href="#sec-pinf">P&infin;</a></li>
+    <li><a href="#sec-adjacencia">Adyacencia</a></li>
+    <li><a href="#sec-implementacion">Implementaci&oacute;n</a></li>
+    <li><a href="#sec-visualizador">Visualizador</a></li>
+    <li><a href="#sec-interactivo">Demo interactivo</a></li>
+    <li><a href="#sec-estructura">Estructura</a></li>
+  </ul>
+</nav>
+
+<div class="wrapper">
+
+<!-- ==================== 1. INTRODUCCION ==================== -->
+<section id="sec-intro">
+<h2>1. Introducci&oacute;n</h2>
+<p>
+  Este reporte describe, paso a paso, la teor&iacute;a, los algoritmos y la implementaci&oacute;n
+  del <strong>grafo dual de un pol&iacute;gono simple</strong>. El problema central es:
+</p>
+<div class="box">
+  <h4>Problema</h4>
+  <p style="margin:0">
+    Dado un pol&iacute;gono simple <em>P</em>, triangularlo y construir su <strong>grafo dual</strong>:
+    un grafo donde cada tri&aacute;ngulo se convierte en un nodo, y dos nodos se conectan
+    si sus tri&aacute;ngulos comparten una diagonal interior.
+    Los tri&aacute;ngulos que tocan el borde del pol&iacute;gono se conectan a un nodo especial
+    <strong>P&infin;</strong> que representa la cara exterior (el &ldquo;infinito&rdquo;).
+  </p>
+</div>
+<p>
+  El pipeline completo que implementamos es:
+</p>
+<ol>
+  <li><strong>Lectura</strong> del pol&iacute;gono desde un archivo <code>.obj</code></li>
+  <li><strong>Garant&iacute;a de orientaci&oacute;n CCW</strong> (antihoraria)</li>
+  <li><strong>Triangulaci&oacute;n</strong> mediante partici&oacute;n y-mon&oacute;tona + sweep line</li>
+  <li><strong>C&aacute;lculo de baricentros</strong> de cada tri&aacute;ngulo</li>
+  <li><strong>Construcci&oacute;n del grafo dual</strong> (mapa de aristas, clasificaci&oacute;n borde/interior, P&infin;)</li>
+  <li><strong>Visualizaci&oacute;n por capas</strong> con VTK (PNGs, GIF, modo interactivo)</li>
+</ol>
+</section>
+
+<!-- ==================== 2. POLIGONO SIMPLE ==================== -->
+<section id="sec-poligono">
+<h2>2. Pol&iacute;gono simple</h2>
+<p>
+  Un <strong>pol&iacute;gono simple</strong> es una figura plana cerrada formada por una secuencia
+  finita de segmentos de recta (aristas) que no se intersecan entre s&iacute;, excepto en sus
+  v&eacute;rtices consecutivos. Formalmente: dados <em>n</em> puntos
+  <em>v<sub>0</sub>, v<sub>1</sub>, &hellip;, v<sub>n-1</sub></em>, el pol&iacute;gono es la
+  uni&oacute;n de los segmentos <em>v<sub>i</sub>v<sub>i+1 mod n</sub></em>.
+</p>
+<figure>
+  <svg id="svgPolygon" viewBox="-20 -20 440 280" style="max-height:260px">
+    <defs>
+      <marker id="arrowY" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6" fill="#f0d64b"/>
+      </marker>
+    </defs>
+    <!-- grid -->
+    <g stroke="#2a2a3a" stroke-width=".5">
+      <line x1="0" y1="0" x2="400" y2="0"/><line x1="0" y1="50" x2="400" y2="50"/>
+      <line x1="0" y1="100" x2="400" y2="100"/><line x1="0" y1="150" x2="400" y2="150"/>
+      <line x1="0" y1="200" x2="400" y2="200"/><line x1="0" y1="250" x2="400" y2="250"/>
+      <line x1="0" y1="0" x2="0" y2="250"/><line x1="100" y1="0" x2="100" y2="250"/>
+      <line x1="200" y1="0" x2="200" y2="250"/><line x1="300" y1="0" x2="300" y2="250"/>
+      <line x1="400" y1="0" x2="400" y2="250"/>
+    </g>
+    <!-- polygon L-shape -->
+    <polygon points="40,220 200,220 200,130 120,130 120,30 40,30"
+             fill="rgba(91,184,255,.12)" stroke="#f0d64b" stroke-width="2.5"
+             stroke-linejoin="round"/>
+    <!-- vertices -->
+    <g fill="#ff6e3a">
+      <circle cx="40" cy="220" r="5"/><circle cx="200" cy="220" r="5"/>
+      <circle cx="200" cy="130" r="5"/><circle cx="120" cy="130" r="5"/>
+      <circle cx="120" cy="30" r="5"/><circle cx="40" cy="30" r="5"/>
+    </g>
+    <!-- labels -->
+    <g font-size="13" fill="#a0a0b8" font-family="monospace">
+      <text x="22" y="240">v<tspan baseline-shift="sub" font-size="10">0</tspan></text>
+      <text x="208" y="240">v<tspan baseline-shift="sub" font-size="10">1</tspan></text>
+      <text x="208" y="126">v<tspan baseline-shift="sub" font-size="10">2</tspan></text>
+      <text x="128" y="126">v<tspan baseline-shift="sub" font-size="10">3</tspan></text>
+      <text x="128" y="26">v<tspan baseline-shift="sub" font-size="10">4</tspan></text>
+      <text x="18" y="26">v<tspan baseline-shift="sub" font-size="10">5</tspan></text>
+    </g>
+    <!-- non-simple example -->
+    <g transform="translate(270,20)">
+      <text x="0" y="0" font-size="11" fill="#e85454" font-weight="600">No simple</text>
+      <line x1="0" y1="20" x2="100" y2="120" stroke="#e85454" stroke-width="1.5"/>
+      <line x1="100" y1="20" x2="0" y2="120" stroke="#e85454" stroke-width="1.5"/>
+      <line x1="0" y1="20" x2="100" y2="20" stroke="#e85454" stroke-width="1.5"/>
+      <line x1="0" y1="120" x2="100" y2="120" stroke="#e85454" stroke-width="1.5"/>
+      <circle cx="50" cy="70" r="4" fill="#e85454"/>
+      <text x="56" y="66" font-size="10" fill="#e85454">intersecci&oacute;n</text>
+    </g>
+  </svg>
+  <figcaption>Izquierda: pol&iacute;gono simple en forma de L (6 v&eacute;rtices, CCW). Derecha: pol&iacute;gono <em>no</em> simple (aristas se cruzan).</figcaption>
+</figure>
+<p>
+  Nuestros archivos de entrada usan el formato <strong>Wavefront OBJ</strong> simplificado:
+  l&iacute;neas <code>v x y z</code> para v&eacute;rtices (z siempre 0) y una l&iacute;nea
+  <code>f i j k &hellip;</code> con los &iacute;ndices base-1 de la cara.
+</p>
+<pre><code><span class="cm"># Ejemplo: cuadrado CCW</span>
+<span class="kw">v</span> 0.0 0.0 0.0
+<span class="kw">v</span> 4.0 0.0 0.0
+<span class="kw">v</span> 4.0 4.0 0.0
+<span class="kw">v</span> 0.0 4.0 0.0
+<span class="kw">f</span> 1 2 3 4</code></pre>
+</section>
+
+<!-- ==================== 3. ORIENTACION ==================== -->
+<section id="sec-orientacion">
+<h2>3. Orientaci&oacute;n y &aacute;rea con signo</h2>
+<p>
+  La <strong>orientaci&oacute;n</strong> de un pol&iacute;gono se define por el orden en que se
+  recorren sus v&eacute;rtices. Existen dos convenciones:
+</p>
+<ul>
+  <li><strong>CCW (Counter-Clockwise / Antihorario)</strong>: el interior queda a la izquierda del recorrido. Produce &aacute;rea <em>positiva</em>.</li>
+  <li><strong>CW (Clockwise / Horario)</strong>: el interior queda a la derecha. Produce &aacute;rea <em>negativa</em>.</li>
+</ul>
+
+<h3>3.1 F&oacute;rmula del &aacute;rea con signo (Shoelace)</h3>
+<p>
+  Calculamos el &aacute;rea con signo usando la <strong>f&oacute;rmula del cord&oacute;n de zapato</strong> (shoelace formula):
+</p>
+<div class="box algo">
+  <h4>F&oacute;rmula de Shoelace</h4>
+  <p style="margin:0;font-family:monospace;font-size:.95rem;text-align:center">
+    A = &frac12; &sum;<sub>i=0</sub><sup>n-1</sup> (x<sub>i</sub> &middot; y<sub>i+1</sub> &minus; x<sub>i+1</sub> &middot; y<sub>i</sub>)
+  </p>
+  <p style="margin:8px 0 0;font-size:.88rem">
+    donde los &iacute;ndices son m&oacute;dulo <em>n</em>. Si A &gt; 0 &rArr; CCW. Si A &lt; 0 &rArr; CW.
+  </p>
+</div>
+<p>En nuestra implementaci&oacute;n (<code>Polygon.hxx</code>):</p>
+<pre><code><span class="tp">TReal</span> a = <span class="nb">0</span>;
+<span class="kw">for</span>( <span class="kw">auto</span> pIt = <span class="kw">this</span>-&gt;topology_begin(); pIt != <span class="kw">this</span>-&gt;topology_end(); ++pIt )
+{
+  <span class="kw">auto</span> qIt = std::next( pIt );
+  <span class="kw">if</span>( qIt == <span class="kw">this</span>-&gt;topology_end() )
+    qIt = <span class="kw">this</span>-&gt;topology_begin();
+
+  <span class="kw">auto</span> p = <span class="kw">this</span>-&gt;m_Points[ *pIt ];
+  <span class="kw">auto</span> q = <span class="kw">this</span>-&gt;m_Points[ *qIt ];
+
+  a += p[<span class="nb">0</span>] * q[<span class="nb">1</span>];
+  a -= q[<span class="nb">0</span>] * p[<span class="nb">1</span>];
+}
+<span class="kw">return</span>( a * <span class="tp">TReal</span>(<span class="nb">0.5</span>) );</code></pre>
+
+<h3>3.2 Garant&iacute;a CCW</h3>
+<p>
+  La triangulaci&oacute;n requiere orientaci&oacute;n <strong>CCW</strong>. Si el &aacute;rea resulta
+  negativa, invertimos el orden de los v&eacute;rtices:
+</p>
+<pre><code><span class="kw">void</span> <span class="fn">guarantee_CCW</span>()
+{
+  <span class="kw">if</span>( <span class="kw">this</span>-&gt;area() &lt; <span class="tp">TReal</span>(<span class="nb">0</span>) )
+    <span class="kw">this</span>-&gt;invert();  <span class="cm">// std::reverse sobre los v&eacute;rtices de la topolog&iacute;a</span>
+}</code></pre>
+
+<figure>
+  <svg viewBox="-10 -10 520 200" style="max-height:200px">
+    <!-- CCW -->
+    <g transform="translate(60,100)">
+      <polygon points="0,60 80,60 80,-60 0,-60" fill="none" stroke="#4bcc6a" stroke-width="2"/>
+      <path d="M40,-40 A30,30 0 1,1 60,-10" fill="none" stroke="#4bcc6a" stroke-width="1.5" marker-end="url(#arrowG)"/>
+      <text x="30" y="90" text-anchor="middle" font-size="13" fill="#4bcc6a" font-weight="600">CCW (A &gt; 0)</text>
+      <circle cx="0" cy="60" r="4" fill="#ff6e3a"/><circle cx="80" cy="60" r="4" fill="#ff6e3a"/>
+      <circle cx="80" cy="-60" r="4" fill="#ff6e3a"/><circle cx="0" cy="-60" r="4" fill="#ff6e3a"/>
+      <text x="-12" y="76" font-size="10" fill="#a0a0b8">0</text>
+      <text x="86" y="76" font-size="10" fill="#a0a0b8">1</text>
+      <text x="86" y="-52" font-size="10" fill="#a0a0b8">2</text>
+      <text x="-12" y="-52" font-size="10" fill="#a0a0b8">3</text>
+    </g>
+    <defs>
+      <marker id="arrowG" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6" fill="#4bcc6a"/>
+      </marker>
+      <marker id="arrowR" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6" fill="#e85454"/>
+      </marker>
+    </defs>
+    <!-- CW -->
+    <g transform="translate(340,100)">
+      <polygon points="0,60 80,60 80,-60 0,-60" fill="none" stroke="#e85454" stroke-width="2"/>
+      <path d="M40,-40 A30,30 0 1,0 20,-10" fill="none" stroke="#e85454" stroke-width="1.5" marker-end="url(#arrowR)"/>
+      <text x="30" y="90" text-anchor="middle" font-size="13" fill="#e85454" font-weight="600">CW (A &lt; 0)</text>
+      <circle cx="0" cy="60" r="4" fill="#ff6e3a"/><circle cx="80" cy="60" r="4" fill="#ff6e3a"/>
+      <circle cx="80" cy="-60" r="4" fill="#ff6e3a"/><circle cx="0" cy="-60" r="4" fill="#ff6e3a"/>
+      <text x="-12" y="76" font-size="10" fill="#a0a0b8">0</text>
+      <text x="86" y="76" font-size="10" fill="#a0a0b8">3</text>
+      <text x="86" y="-52" font-size="10" fill="#a0a0b8">2</text>
+      <text x="-12" y="-52" font-size="10" fill="#a0a0b8">1</text>
+    </g>
+  </svg>
+  <figcaption>Mismos 4 v&eacute;rtices. Izquierda: recorrido CCW (antihorario, &aacute;rea positiva). Derecha: recorrido CW (horario, &aacute;rea negativa).</figcaption>
+</figure>
+</section>
+
+<!-- ==================== 4. TRIANGULACION ==================== -->
+<section id="sec-triangulacion">
+<h2>4. Triangulaci&oacute;n del pol&iacute;gono</h2>
+<p>
+  Triangular un pol&iacute;gono es descomponerlo en tri&aacute;ngulos que no se solapan y que
+  cubren toda su superficie. Todo pol&iacute;gono simple de <em>n</em> v&eacute;rtices produce
+  exactamente <strong>n &minus; 2 tri&aacute;ngulos</strong>.
+</p>
+
+<h3>4.1 Estrategia: partici&oacute;n y-mon&oacute;tona + sweep line</h3>
+<p>Nuestra implementaci&oacute;n usa un enfoque en dos fases:</p>
+<div class="box algo">
+  <h4>Fase 1 &mdash; Partici&oacute;n Y-Mon&oacute;tona</h4>
+  <p style="margin:0">
+    Un pol&iacute;gono es <strong>y-mon&oacute;tono</strong> si cualquier l&iacute;nea horizontal lo corta
+    en a lo sumo dos puntos. Usamos <code>CGAL::y_monotone_partition_2</code> para descomponer
+    el pol&iacute;gono original en piezas y-mon&oacute;tonas. Esto se realiza en <strong>O(n log n)</strong>.
+  </p>
+</div>
+<div class="box algo">
+  <h4>Fase 2 &mdash; Sweep Line (barrido vertical)</h4>
+  <p style="margin:0">
+    Cada pieza y-mon&oacute;tona se triangula con un algoritmo de barrido (<em>sweep</em>) que
+    procesa los v&eacute;rtices de arriba hacia abajo, usando una <strong>pila</strong> para
+    determinar qu&eacute; diagonales insertar. Esto se realiza en <strong>O(n)</strong> por pieza.
+  </p>
+</div>
+
+<h3>4.2 El algoritmo de sweep (detalle)</h3>
+<p>Para una pieza y-mon&oacute;tona:</p>
+<ol>
+  <li><strong>Ordenar</strong> los v&eacute;rtices por coordenada <em>y</em> descendente (de arriba a abajo). En caso de empate, por <em>x</em> ascendente.</li>
+  <li><strong>Clasificar en cadenas</strong>: cada v&eacute;rtice pertenece a la cadena izquierda o derecha del pol&iacute;gono mon&oacute;tono (la funci&oacute;n <code>mark_left</code> recorre la frontera desde el v&eacute;rtice m&aacute;s alto hasta el m&aacute;s bajo por un lado).</li>
+  <li><strong>Apilar</strong> los primeros dos v&eacute;rtices.</li>
+  <li>Para cada v&eacute;rtice <em>v<sub>j</sub></em> restante (excepto el &uacute;ltimo):
+    <ul>
+      <li>Si <em>v<sub>j</sub></em> est&aacute; en la <strong>misma cadena</strong> que el tope de la pila: desapilar v&eacute;rtices mientras formen diagonales v&aacute;lidas (test de orientaci&oacute;n con <code>CGAL::orientation</code>) y emitir un tri&aacute;ngulo por cada v&eacute;rtice desapilado.</li>
+      <li>Si est&aacute; en la <strong>cadena opuesta</strong>: conectar <em>v<sub>j</sub></em> con todos los v&eacute;rtices de la pila (emitir un tri&aacute;ngulo por cada par consecutivo).</li>
+    </ul>
+  </li>
+  <li><strong>&Uacute;ltimo v&eacute;rtice</strong>: conectar con todos los v&eacute;rtices restantes en la pila.</li>
+</ol>
+
+<pre><code><span class="cm">// Polygon_Functions.hxx &mdash; extracto del sweep</span>
+<span class="kw">for</span>( ; std::next(vIt) != sweep.end(); ++vIt )
+{
+  <span class="kw">auto</span> sv = s.top();
+  <span class="kw">if</span>( std::get&lt;<span class="nb">2</span>&gt;(*vIt) == std::get&lt;<span class="nb">2</span>&gt;(sv) ) <span class="cm">// Misma cadena</span>
+  {
+    <span class="cm">// desapilar mientras la diagonal sea v&aacute;lida</span>
+    <span class="kw">while</span>( valid &amp;&amp; s.size() &gt; <span class="nb">0</span> )
+    {
+      <span class="kw">auto</span> ori = CGAL::<span class="fn">orientation</span>( ... );
+      <span class="kw">if</span>( diagonal_valida )
+        T.<span class="fn">add_triangle</span>( vIt, ssv, psv );
+    }
+  }
+  <span class="kw">else</span> <span class="cm">// Cadena opuesta: conectar con todos</span>
+  {
+    <span class="kw">while</span>( s.size() &gt; <span class="nb">1</span> )
+      T.<span class="fn">add_triangle</span>( vIt, st, sb );
+  }
+}</code></pre>
+
+<figure id="figTriang">
+  <svg id="svgTriang" viewBox="-10 -10 520 320" style="max-height:320px"></svg>
+  <div class="step-controls">
+    <button class="step-btn active" onclick="showTriangStep(0)">Pol&iacute;gono</button>
+    <button class="step-btn" onclick="showTriangStep(1)">Partici&oacute;n mon&oacute;tona</button>
+    <button class="step-btn" onclick="showTriangStep(2)">Triangulaci&oacute;n</button>
+  </div>
+  <figcaption>Pol&iacute;gono en forma de L: partici&oacute;n y-mon&oacute;tona (l&iacute;nea punteada verde) y triangulaci&oacute;n final (l&iacute;neas azules).</figcaption>
+</figure>
+</section>
+
+<!-- ==================== 5. BARICENTROS ==================== -->
+<section id="sec-baricentros">
+<h2>5. Baricentros</h2>
+<p>
+  El <strong>baricentro</strong> (o centroide) de un tri&aacute;ngulo con v&eacute;rtices
+  <em>A</em>, <em>B</em>, <em>C</em> es el punto donde se intersecan sus tres medianas.
+  Se calcula como el promedio aritm&eacute;tico de las coordenadas:
+</p>
+<div class="box algo">
+  <h4>F&oacute;rmula del baricentro</h4>
+  <p style="margin:0;font-family:monospace;font-size:.95rem;text-align:center">
+    G = ( (x<sub>A</sub> + x<sub>B</sub> + x<sub>C</sub>) / 3 , (y<sub>A</sub> + y<sub>B</sub> + y<sub>C</sub>) / 3 )
+  </p>
+</div>
+<p>En <code>dual_graph.cxx</code>:</p>
+<pre><code>std::vector&lt; <span class="tp">TPoint</span> &gt; barycenters;
+<span class="kw">for</span>( <span class="kw">auto</span> tIt = mesh.<span class="fn">topology_begin</span>(); tIt != mesh.<span class="fn">topology_end</span>(); ++tIt )
+{
+  <span class="kw">const</span> <span class="tp">TPoint</span>&amp; pa = mesh.<span class="fn">point</span>( (*tIt)[<span class="nb">0</span>] );
+  <span class="kw">const</span> <span class="tp">TPoint</span>&amp; pb = mesh.<span class="fn">point</span>( (*tIt)[<span class="nb">1</span>] );
+  <span class="kw">const</span> <span class="tp">TPoint</span>&amp; pc = mesh.<span class="fn">point</span>( (*tIt)[<span class="nb">2</span>] );
+  barycenters.<span class="fn">push_back</span>(
+    <span class="tp">TPoint</span>(
+      ( pa[<span class="nb">0</span>] + pb[<span class="nb">0</span>] + pc[<span class="nb">0</span>] ) / <span class="nb">3.0</span>,
+      ( pa[<span class="nb">1</span>] + pb[<span class="nb">1</span>] + pc[<span class="nb">1</span>] ) / <span class="nb">3.0</span>
+    )
+  );
+}</code></pre>
+<p>
+  Cada baricentro se convierte en un <strong>nodo del grafo dual</strong>. Est&aacute; siempre
+  dentro de su tri&aacute;ngulo, lo cual garantiza que los nodos del grafo dual est&eacute;n
+  siempre contenidos en el pol&iacute;gono original.
+</p>
+</section>
+
+<!-- ==================== 6. GRAFO DUAL ==================== -->
+<section id="sec-dual">
+<h2>6. Construcci&oacute;n del grafo dual</h2>
+<p>
+  El grafo dual transforma la <strong>topolog&iacute;a</strong> de la triangulaci&oacute;n en un
+  <strong>grafo de adyacencia</strong>. La idea central:
+</p>
+<ul>
+  <li>Cada <strong>tri&aacute;ngulo</strong> &rarr; un <strong>nodo</strong> (ubicado en su baricentro)</li>
+  <li>Cada <strong>arista compartida</strong> entre dos tri&aacute;ngulos &rarr; una <strong>arista interna</strong> del dual</li>
+  <li>Cada <strong>arista de frontera</strong> (solo un tri&aacute;ngulo la toca) &rarr; una <strong>arista externa</strong> hacia P&infin;</li>
+</ul>
+
+<h3>6.1 Algoritmo paso a paso (<code>build_dual_graph</code>)</h3>
+<p>La funci&oacute;n <code>build_dual_graph</code> en <code>DualGraph.hxx</code> sigue estos pasos:</p>
+
+<div class="box algo">
+  <h4>Paso 1 &mdash; Inicializar</h4>
+  <p style="margin:0">Limpiar el objeto dual. Copiar los baricentros. Contar <em>n</em> tri&aacute;ngulos.</p>
+</div>
+
+<div class="box algo">
+  <h4>Paso 2 &mdash; Construir el mapa de aristas (edge_map)</h4>
+  <p style="margin:0">
+    Para cada tri&aacute;ngulo <em>T<sub>k</sub></em> con v&eacute;rtices (a, b, c), registrar sus tres aristas
+    como pares ordenados <code>(min, max)</code> en un mapa: <code>arista &rarr; [lista de tri&aacute;ngulos]</code>.
+    <br>Cada arista aparecer&aacute; en <strong>1 o 2</strong> tri&aacute;ngulos.
+  </p>
+</div>
+
+<pre><code><span class="tp">TEdgeMap</span> edge_map;
+<span class="kw">for</span>( <span class="kw">auto</span> tIt = mesh.<span class="fn">topology_begin</span>(); ... ; ++tIt, ++tri_idx )
+{
+  <span class="kw">const</span> <span class="tp">TIndex</span> a = (*tIt)[<span class="nb">0</span>], b = (*tIt)[<span class="nb">1</span>], c = (*tIt)[<span class="nb">2</span>];
+
+  edge_map[ {<span class="fn">min</span>(a,b), <span class="fn">max</span>(a,b)} ].<span class="fn">push_back</span>( tri_idx );
+  edge_map[ {<span class="fn">min</span>(b,c), <span class="fn">max</span>(b,c)} ].<span class="fn">push_back</span>( tri_idx );
+  edge_map[ {<span class="fn">min</span>(a,c), <span class="fn">max</span>(a,c)} ].<span class="fn">push_back</span>( tri_idx );
+}</code></pre>
+
+<div class="box algo">
+  <h4>Paso 3 &mdash; Clasificar aristas</h4>
+  <p style="margin:0">
+    Recorrer el <code>edge_map</code>. Si una arista tiene <strong>2 tri&aacute;ngulos</strong> &rarr;
+    arista <em>interna</em> del dual (conecta los dos nodos). Si tiene <strong>1 tri&aacute;ngulo</strong>
+    &rarr; arista <em>externa</em> (ese tri&aacute;ngulo es de frontera, se conecta a P&infin;).
+  </p>
+</div>
+
+<pre><code><span class="kw">for</span>( <span class="kw">const auto</span>&amp; entry : edge_map )
+{
+  <span class="kw">const auto</span>&amp; tris = entry.second;
+  <span class="kw">if</span>( tris.<span class="fn">size</span>() == <span class="nb">2</span> )  <span class="cm">// Arista compartida &rarr; interna</span>
+  {
+    dual.m_AdjacencyMatrix[i][j] = <span class="kw">true</span>;
+    dual.m_InternalEdges.<span class="fn">push_back</span>( {i, j} );
+  }
+  <span class="kw">else if</span>( tris.<span class="fn">size</span>() == <span class="nb">1</span> )  <span class="cm">// Arista frontera &rarr; externa</span>
+  {
+    dual.m_IsBoundary[i] = <span class="kw">true</span>;
+    dual.m_ExternalEdges.<span class="fn">push_back</span>( {i, p_inf_idx} );
+  }
+}</code></pre>
+
+<figure id="figDual">
+  <svg id="svgDual" viewBox="-10 -10 520 360" style="max-height:360px"></svg>
+  <div class="step-controls">
+    <button class="step-btn active" onclick="showDualStep(0)">Pol&iacute;gono</button>
+    <button class="step-btn" onclick="showDualStep(1)">Triangulaci&oacute;n</button>
+    <button class="step-btn" onclick="showDualStep(2)">Baricentros</button>
+    <button class="step-btn" onclick="showDualStep(3)">Aristas internas</button>
+    <button class="step-btn" onclick="showDualStep(4)">Dual completo</button>
+  </div>
+  <figcaption>Construcci&oacute;n paso a paso del grafo dual sobre un cuadrado triangulado. Verde: nodos y aristas internas. Rojo: P&infin; y aristas externas.</figcaption>
+</figure>
+</section>
+
+<!-- ==================== 7. P-INFINITO ==================== -->
+<section id="sec-pinf">
+<h2>7. El nodo P&infin; (punto en el infinito)</h2>
+<p>
+  En la teor&iacute;a de grafos planares, el grafo dual de una subdivisi&oacute;n planar incluye
+  un nodo para la <strong>cara exterior</strong> (la regi&oacute;n no acotada que rodea al pol&iacute;gono).
+  Llamamos a este nodo <strong>P&infin;</strong>.
+</p>
+<p>
+  Todo tri&aacute;ngulo que tiene al menos una arista sobre el <strong>borde del pol&iacute;gono</strong>
+  (arista de frontera) es adyacente a la cara exterior. En el grafo dual, esto se refleja
+  como una arista desde ese tri&aacute;ngulo hacia P&infin;.
+</p>
+
+<h3>7.1 Posici&oacute;n de P&infin;</h3>
+<p>
+  P&infin; representa un punto &ldquo;en el infinito&rdquo;. Para la visualizaci&oacute;n,
+  necesitamos ubicarlo fuera del pol&iacute;gono. Lo calculamos a partir de la
+  <strong>caja envolvente</strong> (bounding box):
+</p>
+<pre><code><span class="cm">// Bounding box del pol&iacute;gono</span>
+<span class="tp">TReal</span> cx = (xmin + xmax) / <span class="nb">2</span>;
+<span class="tp">TReal</span> cy = (ymin + ymax) / <span class="nb">2</span>;
+<span class="tp">TReal</span> dx = xmax - xmin;
+<span class="tp">TReal</span> dy = ymax - ymin;
+
+<span class="cm">// Posicionar P&infin; lejos, abajo a la derecha</span>
+dual.m_PointInfinity = <span class="tp">TPoint</span>( cx + <span class="nb">2</span>*dx, cy - <span class="nb">2</span>*dy );</code></pre>
+<p>
+  La posici&oacute;n exacta no afecta la topolog&iacute;a del grafo &mdash; solo sirve para que
+  la visualizaci&oacute;n muestre las aristas externas de forma clara, sin interferir con
+  las aristas internas.
+</p>
+
+<div class="box warn">
+  <h4>Propiedad clave</h4>
+  <p style="margin:0">
+    El grafo dual de una triangulaci&oacute;n de un pol&iacute;gono simple es siempre un <strong>&aacute;rbol</strong>
+    (no tiene ciclos). El &aacute;rbol tiene exactamente <em>n &minus; 2</em> nodos internos (uno
+    por tri&aacute;ngulo) m&aacute;s el nodo P&infin;. Los nodos hoja del &aacute;rbol (si los hubiera)
+    corresponden a tri&aacute;ngulos &ldquo;orejas&rdquo; del pol&iacute;gono.
+  </p>
+</div>
+</section>
+
+<!-- ==================== 8. ADJACENCIA ==================== -->
+<section id="sec-adjacencia">
+<h2>8. Matriz de adyacencia</h2>
+<p>
+  La estructura <code>DualGraph</code> almacena una <strong>matriz de adyacencia</strong> booleana
+  de tama&ntilde;o <em>(n+1) &times; (n+1)</em>, donde <em>n</em> es el n&uacute;mero de tri&aacute;ngulos
+  y la fila/columna <em>n</em> corresponde a P&infin;.
+</p>
+<p>
+  <code>M[i][j] = true</code> indica que el tri&aacute;ngulo <em>i</em> y el tri&aacute;ngulo <em>j</em>
+  comparten una arista (o que <em>i</em> est&aacute; conectado a P&infin; si <em>j = n</em>).
+</p>
+
+<h3>Ejemplo: cuadrado (2 tri&aacute;ngulos)</h3>
+<p>
+  Un cuadrado se triangula en 2 tri&aacute;ngulos: T<sub>0</sub> y T<sub>1</sub>. Comparten
+  una diagonal (arista interna). Ambos tienen aristas de frontera (aristas externas a P&infin;).
+</p>
+
+<div style="text-align:center">
+  <div class="matrix-grid" style="grid-template-columns:repeat(4,36px)">
+    <div class="cell hdr"></div><div class="cell hdr">T<sub>0</sub></div><div class="cell hdr">T<sub>1</sub></div><div class="cell hdr">P&infin;</div>
+    <div class="cell hdr">T<sub>0</sub></div><div class="cell v0">0</div><div class="cell v1">1</div><div class="cell v1">1</div>
+    <div class="cell hdr">T<sub>1</sub></div><div class="cell v1">1</div><div class="cell v0">0</div><div class="cell v1">1</div>
+    <div class="cell hdr">P&infin;</div><div class="cell v1">1</div><div class="cell v1">1</div><div class="cell v0">0</div>
+  </div>
+</div>
+<p style="text-align:center;font-size:.85rem;color:var(--fg2);margin-top:8px">
+  Matriz 3&times;3: T<sub>0</sub> &harr; T<sub>1</sub> (diagonal interna),
+  T<sub>0</sub> &harr; P&infin; y T<sub>1</sub> &harr; P&infin; (aristas de frontera).
+</p>
+
+<h3>Ejemplo: pent&aacute;gono (3 tri&aacute;ngulos)</h3>
+<div style="text-align:center">
+  <div class="matrix-grid" style="grid-template-columns:repeat(5,36px)">
+    <div class="cell hdr"></div><div class="cell hdr">T<sub>0</sub></div><div class="cell hdr">T<sub>1</sub></div><div class="cell hdr">T<sub>2</sub></div><div class="cell hdr">P&infin;</div>
+    <div class="cell hdr">T<sub>0</sub></div><div class="cell v0">0</div><div class="cell v1">1</div><div class="cell v0">0</div><div class="cell v1">1</div>
+    <div class="cell hdr">T<sub>1</sub></div><div class="cell v1">1</div><div class="cell v0">0</div><div class="cell v1">1</div><div class="cell v1">1</div>
+    <div class="cell hdr">T<sub>2</sub></div><div class="cell v0">0</div><div class="cell v1">1</div><div class="cell v0">0</div><div class="cell v1">1</div>
+    <div class="cell hdr">P&infin;</div><div class="cell v1">1</div><div class="cell v1">1</div><div class="cell v1">1</div><div class="cell v0">0</div>
+  </div>
+</div>
+<p style="text-align:center;font-size:.85rem;color:var(--fg2);margin-top:8px">
+  4&times;4: T<sub>0</sub>&harr;T<sub>1</sub>, T<sub>1</sub>&harr;T<sub>2</sub> (internas). Los tres tocan el borde &rarr; todos conectan a P&infin;.
+</p>
+</section>
+
+<!-- ==================== 9. IMPLEMENTACION ==================== -->
+<section id="sec-implementacion">
+<h2>9. Implementaci&oacute;n</h2>
+
+<h3>9.1 Arquitectura de la librer&iacute;a <code>pujCGAL</code></h3>
+<p>
+  La implementaci&oacute;n sigue un dise&ntilde;o <strong>header-only</strong> con templates de C++17.
+  Cada clase se divide en <code>.h</code> (declaraci&oacute;n) y <code>.hxx</code> (implementaci&oacute;n),
+  incluido autom&aacute;ticamente al final del <code>.h</code>.
+</p>
+
+<table class="files">
+  <thead>
+    <tr><th>Clase</th><th>Responsabilidad</th><th>Autor</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Polygon</code></td>
+      <td>Representaci&oacute;n del pol&iacute;gono: puntos, topolog&iacute;a, &aacute;rea, orientaci&oacute;n CCW/CW</td>
+      <td>Profesor</td>
+    </tr>
+    <tr>
+      <td><code>Triangulation</code></td>
+      <td>Almac&eacute;n de puntos + tri&aacute;ngulos (topolog&iacute;a como <code>array&lt;TIndex,3&gt;</code>)</td>
+      <td>Profesor</td>
+    </tr>
+    <tr>
+      <td><code>triangulate()</code></td>
+      <td>Partici&oacute;n y-mon&oacute;tona (CGAL) + sweep line con pila</td>
+      <td>Profesor</td>
+    </tr>
+    <tr>
+      <td><code>IO</code></td>
+      <td>Lectura/escritura de pol&iacute;gonos y triangulaciones en formato OBJ</td>
+      <td>Profesor</td>
+    </tr>
+    <tr>
+      <td><strong><code>DualGraph</code></strong></td>
+      <td>Estructura del grafo dual: baricentros, P&infin;, aristas, matriz de adyacencia</td>
+      <td><strong>Estudiantes</strong></td>
+    </tr>
+    <tr>
+      <td><strong><code>build_dual_graph()</code></strong></td>
+      <td>Algoritmo: edge_map &rarr; clasificaci&oacute;n &rarr; adyacencia &rarr; P&infin;</td>
+      <td><strong>Estudiantes</strong></td>
+    </tr>
+    <tr>
+      <td><strong><code>IO_DualGraph</code></strong></td>
+      <td>Serializaci&oacute;n del grafo dual a OBJ (v&eacute;rtices <code>v</code> + aristas <code>l</code>)</td>
+      <td><strong>Estudiantes</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>9.2 Kernel de CGAL</h3>
+<p>
+  Usamos <code>Exact_predicates_inexact_constructions_kernel</code>: predicados geom&eacute;tricos
+  <strong>exactos</strong> (orientaci&oacute;n, intersecci&oacute;n) pero construcci&oacute;n de puntos con
+  <strong>aritm&eacute;tica de punto flotante</strong>. Esto da robustez num&eacute;rica sin sacrificar
+  rendimiento.
+</p>
+
+<h3>9.3 Pipeline del ejecutable <code>dual_graph</code></h3>
+<pre><code><span class="cm">// dual_graph.cxx &mdash; flujo principal</span>
+
+<span class="cm">// a.</span> pujCGAL::IO::<span class="fn">read</span>( argv[1], polygon );    <span class="cm">// leer .obj</span>
+<span class="cm">// b.</span> polygon.<span class="fn">guarantee_CCW</span>();                 <span class="cm">// asegurar orientaci&oacute;n</span>
+<span class="cm">// c.</span> pujCGAL::<span class="fn">triangulate</span>( mesh, polygon );    <span class="cm">// triangular</span>
+<span class="cm">// d.</span> pujCGAL::IO::<span class="fn">save</span>( argv[2], mesh );       <span class="cm">// guardar triangulaci&oacute;n</span>
+<span class="cm">// e.</span> <span class="cm">// calcular baricentros</span>                    <span class="cm">// promediar v&eacute;rtices</span>
+<span class="cm">// f.</span> pujCGAL::<span class="fn">build_dual_graph</span>( dual, mesh, barycenters );
+<span class="cm">// g.</span> pujCGAL::IO::<span class="fn">save</span>( argv[3], dual );       <span class="cm">// guardar grafo dual</span>
+<span class="cm">// h.</span> <span class="cm">// imprimir s&iacute;ntesis y matriz de adyacencia</span></code></pre>
+
+<h3>9.4 Formato de salida del grafo dual</h3>
+<p>
+  El archivo <code>.obj</code> del grafo dual usa <code>v</code> para los baricentros
+  (P&infin; como &uacute;ltimo v&eacute;rtice) y <code>l</code> para las aristas:
+</p>
+<pre><code><span class="cm"># Dual graph: 4 nodes, 2 internal edges, 3 external edges</span>
+<span class="kw">v</span> 3.33 2.00 0     <span class="cm">&larr; baricentro T0</span>
+<span class="kw">v</span> 2.00 0.67 0     <span class="cm">&larr; baricentro T1</span>
+<span class="kw">v</span> 0.67 2.00 0     <span class="cm">&larr; baricentro T2</span>
+<span class="kw">v</span> 10.0 -6.00 0    <span class="cm">&larr; P&infin; (&uacute;ltimo v&eacute;rtice)</span>
+
+<span class="kw">l</span> 1 2              <span class="cm">&larr; arista interna T0&mdash;T1</span>
+<span class="kw">l</span> 2 3              <span class="cm">&larr; arista interna T1&mdash;T2</span>
+<span class="kw">l</span> 1 4              <span class="cm">&larr; arista externa T0&mdash;P&infin;</span>
+<span class="kw">l</span> 2 4
+<span class="kw">l</span> 3 4</code></pre>
+</section>
+
+<!-- ==================== 10. VISUALIZADOR ==================== -->
+<section id="sec-visualizador">
+<h2>10. Visualizador VTK</h2>
+<p>
+  El ejecutable <code>visualizer</code> es una aplicaci&oacute;n C++ que usa
+  <strong>VTK (Visualization Toolkit)</strong> para renderizar las tres capas (pol&iacute;gono,
+  triangulaci&oacute;n, grafo dual) con colores consistentes.
+</p>
+
+<h3>10.1 Capas de renderizado</h3>
+<table class="files">
+  <thead><tr><th>Capa</th><th>Elementos</th><th>Color</th><th>Z-order</th></tr></thead>
+  <tbody>
+    <tr><td>Pol&iacute;gono</td><td>Contorno cerrado + v&eacute;rtices</td><td style="color:#f0d64b">Amarillo + <span style="color:#ff6e3a">naranja</span></td><td>0.00</td></tr>
+    <tr><td>Triangulaci&oacute;n</td><td>Aristas &uacute;nicas de los tri&aacute;ngulos</td><td style="color:#5cb8ff">Azul claro</td><td>0.10</td></tr>
+    <tr><td>Grafo dual</td><td>Baricentros + aristas internas + aristas externas + P&infin;</td><td><span style="color:#4bcc6a">Verde</span> + <span style="color:#e85454">rojo</span></td><td>0.20&ndash;0.30</td></tr>
+  </tbody>
+</table>
+
+<h3>10.2 Tres modos de operaci&oacute;n</h3>
+<ul>
+  <li>
+    <strong>Modo por defecto</strong> (sin flags): genera 5 PNGs paso a paso en
+    <code>output/result-NNN/</code>. Cada ejecuci&oacute;n crea una carpeta nueva,
+    sin pisar resultados anteriores.
+  </li>
+  <li>
+    <strong><code>--gif</code></strong>: genera los mismos 5 PNGs m&aacute;s un
+    <code>dual_graph.gif</code> animado usando <strong>ffmpeg</strong> con la t&eacute;cnica
+    de concat demuxer + palettegen para calidad &oacute;ptima.
+  </li>
+  <li>
+    <strong><code>--interactive</code></strong>: abre una ventana VTK en vivo con controles:
+    teclas <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> muestran/ocultan capas,
+    <kbd>s</kbd> captura pantalla, <kbd>q</kbd> sale.
+  </li>
+</ul>
+
+<h3>10.3 Secuencia de los 5 PNGs</h3>
+<table class="files">
+  <thead><tr><th>Archivo</th><th>Capas visibles</th></tr></thead>
+  <tbody>
+    <tr><td><code>00_polygon.png</code></td><td>Solo pol&iacute;gono</td></tr>
+    <tr><td><code>01_triangulation.png</code></td><td>Pol&iacute;gono + triangulaci&oacute;n</td></tr>
+    <tr><td><code>02_barycenters.png</code></td><td>+ baricentros y P&infin;</td></tr>
+    <tr><td><code>03_internal_edges.png</code></td><td>+ aristas internas del dual</td></tr>
+    <tr><td><code>04_dual_complete.png</code></td><td>Grafo dual completo (+ aristas externas)</td></tr>
+  </tbody>
+</table>
+
+<h3>10.4 Herramienta de dibujo: <code>polygon_drawer.py</code></h3>
+<p>
+  Script Python/VTK interactivo para crear pol&iacute;gonos a mano y exportarlos como <code>.obj</code>.
+  Usa una ventana con proyecci&oacute;n ortogr&aacute;fica 2D, glyphs esf&eacute;ricos para los
+  v&eacute;rtices, y soporte para deshacer, limpiar y guardar.
+</p>
+</section>
+
+<!-- ==================== 11. DEMO INTERACTIVO ==================== -->
+<section id="sec-interactivo">
+<h2>11. Demo interactivo</h2>
+<p>
+  Dibuja un pol&iacute;gono haciendo <strong>clic izquierdo</strong> para agregar v&eacute;rtices.
+  Haz <strong>clic derecho</strong> para cerrarlo. El sistema lo triangula y construye el
+  grafo dual en tiempo real.
+</p>
+<canvas id="interactiveCanvas" width="800" height="500"></canvas>
+<div class="canvas-info">
+  Clic izquierdo: agregar v&eacute;rtice &nbsp;|&nbsp; Clic derecho: cerrar pol&iacute;gono &nbsp;|&nbsp;
+  <button class="step-btn" onclick="clearCanvas()" style="display:inline;padding:3px 12px">Limpiar</button>
+</div>
+<div class="step-controls" id="layerToggles" style="display:none">
+  <button class="step-btn active" id="togglePoly" onclick="toggleLayer('poly')">Pol&iacute;gono</button>
+  <button class="step-btn active" id="toggleTri" onclick="toggleLayer('tri')">Triangulaci&oacute;n</button>
+  <button class="step-btn active" id="toggleDual" onclick="toggleLayer('dual')">Grafo dual</button>
+</div>
+</section>
+
+<!-- ==================== 12. ESTRUCTURA ==================== -->
+<section id="sec-estructura">
+<h2>12. Estructura del proyecto</h2>
+<pre><code>taller-dual-graph/
+├── CMakeLists.txt              <span class="cm">&mdash; build: dual_graph + visualizer (CGAL + VTK)</span>
+├── requirements.txt            <span class="cm">&mdash; dependencias Python (solo polygon_drawer.py)</span>
+├── output/                     <span class="cm">&mdash; carpetas auto-numeradas con los resultados</span>
+│   └── result-NNN/
+│       ├── 00_polygon.png .. 04_dual_complete.png
+│       └── dual_graph.gif     <span class="cm">&larr; solo si se us&oacute; --gif</span>
+├── data/
+│   ├── 01_triangulo.obj        <span class="cm">&mdash; caso base (3 v&eacute;rtices)</span>
+│   ├── 02_cuadrado_ccw.obj     <span class="cm">&mdash; cuadrado orientado CCW</span>
+│   ├── 03_cuadrado_cw.obj      <span class="cm">&mdash; cuadrado orientado CW (se invierte)</span>
+│   ├── 04_pentagono_regular.obj
+│   ├── 05_hexagono_regular.obj
+│   ├── 06_forma_L.obj          <span class="cm">&mdash; no convexo</span>
+│   ├── 07_forma_T.obj          <span class="cm">&mdash; no convexo</span>
+│   ├── 08_flecha.obj
+│   ├── 09_peine.obj            <span class="cm">&mdash; 16 v&eacute;rtices, m&uacute;ltiples v&eacute;rtices reflex</span>
+│   ├── 10_irregular_convexo.obj
+│   ├── poly_00.obj / poly_01.obj
+│   ├── test_square.obj
+│   └── test_Lshape.obj
+├── lib/pujCGAL/
+│   ├── Polygon.h / .hxx        <span class="cm">&mdash; pol&iacute;gono (profesor)</span>
+│   ├── Triangulation.h / .hxx  <span class="cm">&mdash; malla triangular (profesor)</span>
+│   ├── IO.h / .hxx             <span class="cm">&mdash; lectura/escritura OBJ (profesor)</span>
+│   ├── DualGraph.h / .hxx      <span class="cm">&mdash; grafo dual (estudiantes)</span>
+│   └── IO_DualGraph.h / .hxx   <span class="cm">&mdash; escritura del dual (estudiantes)</span>
+└── src/
+    ├── triangulate.cxx          <span class="cm">&mdash; referencia del profesor</span>
+    ├── dual_graph.cxx           <span class="cm">&mdash; ejecutable principal</span>
+    ├── visualizer.cxx           <span class="cm">&mdash; visualizador C++/VTK</span>
+    └── polygon_drawer.py        <span class="cm">&mdash; herramienta de dibujo Python/VTK</span></code></pre>
+</section>
+
+</div><!-- .wrapper -->
+
+<footer>
+  Taller 2 &mdash; Geometr&iacute;a Computacional &mdash; Pontificia Universidad Javeriana, 2025
+</footer>
+
+<!-- ==================== SCRIPTS ==================== -->
+<script>
+// ============================================================
+//  SVG: Triangulaci&oacute;n paso a paso (L-shape)
+// ============================================================
+(function(){
+  const svg = document.getElementById('svgTriang');
+  // L-shape vertices (flipped y for SVG)
+  const V = [
+    [40,260],[200,260],[200,160],[120,160],[120,40],[40,40]
+  ];
+  const polyStr = V.map(p=>p.join(',')).join(' ');
+
+  // Monotone partition diagonal: v1--v5 (roughly)
+  // Triangulation diagonals
+  const triEdges = [[0,2],[0,3],[3,4],[0,5]];
+  const triangles = [[0,1,2],[0,2,3],[0,3,5],[3,4,5]];
+
+  function drawStep(step){
+    let h = '';
+    // grid
+    h += '<g stroke="#2a2a3a" stroke-width=".4">';
+    for(let x=0;x<=500;x+=50) h += `<line x1="${x}" y1="0" x2="${x}" y2="300"/>`;
+    for(let y=0;y<=300;y+=50) h += `<line x1="0" y1="${y}" x2="500" y2="${y}"/>`;
+    h += '</g>';
+
+    // polygon fill
+    h += `<polygon points="${polyStr}" fill="rgba(91,184,255,.08)" stroke="#f0d64b" stroke-width="2" stroke-linejoin="round"/>`;
+
+    if(step >= 1){
+      // monotone partition diagonal (v0--v3)
+      h += `<line x1="${V[0][0]}" y1="${V[0][1]}" x2="${V[3][0]}" y2="${V[3][1]}" stroke="#4bcc6a" stroke-width="1.8" stroke-dasharray="6,4"/>`;
+      // labels
+      h += `<text x="${(V[0][0]+V[3][0])/2-30}" y="${(V[0][1]+V[3][1])/2}" font-size="11" fill="#4bcc6a" font-style="italic">partici&oacute;n</text>`;
+    }
+
+    if(step >= 2){
+      // triangulation diagonals
+      for(const [a,b] of triEdges){
+        h += `<line x1="${V[a][0]}" y1="${V[a][1]}" x2="${V[b][0]}" y2="${V[b][1]}" stroke="#5cb8ff" stroke-width="1.5"/>`;
+      }
+      // triangle labels
+      const labels = ['T0','T1','T2','T3'];
+      for(let i=0;i<triangles.length;i++){
+        const t = triangles[i];
+        const cx = (V[t[0]][0]+V[t[1]][0]+V[t[2]][0])/3;
+        const cy = (V[t[0]][1]+V[t[1]][1]+V[t[2]][1])/3;
+        h += `<text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="12" fill="#5cb8ff" font-weight="600">${labels[i]}</text>`;
+      }
+    }
+
+    // vertices
+    h += '<g fill="#ff6e3a">';
+    for(const p of V) h += `<circle cx="${p[0]}" cy="${p[1]}" r="4.5"/>`;
+    h += '</g>';
+    // vertex labels
+    h += '<g font-size="11" fill="#a0a0b8" font-family="monospace">';
+    const offsets = [[-14,16],[6,16],[6,-6],[6,-6],[6,-4],[-16,-4]];
+    for(let i=0;i<V.length;i++){
+      h += `<text x="${V[i][0]+offsets[i][0]}" y="${V[i][1]+offsets[i][1]}">v${i}</text>`;
+    }
+    h += '</g>';
+
+    svg.innerHTML = h;
+  }
+
+  drawStep(0);
+  window.showTriangStep = function(s){
+    drawStep(s);
+    document.querySelectorAll('#figTriang .step-btn').forEach((b,i)=>{
+      b.classList.toggle('active',i===s);
+    });
+  };
+})();
+
+// ============================================================
+//  SVG: Dual graph paso a paso (cuadrado)
+// ============================================================
+(function(){
+  const svg = document.getElementById('svgDual');
+  // Square vertices
+  const V = [[60,280],[340,280],[340,40],[60,40]];
+  const polyStr = V.map(p=>p.join(',')).join(' ');
+
+  // Two triangles: T0=(0,1,2), T1=(0,2,3)
+  const T = [[0,1,2],[0,2,3]];
+  const bary = T.map(t=>[
+    (V[t[0]][0]+V[t[1]][0]+V[t[2]][0])/3,
+    (V[t[0]][1]+V[t[1]][1]+V[t[2]][1])/3
+  ]);
+  const pinf = [440, 320];
+
+  function drawStep(step){
+    let h = '';
+    // grid
+    h += '<g stroke="#2a2a3a" stroke-width=".4">';
+    for(let x=0;x<=500;x+=50) h += `<line x1="${x}" y1="0" x2="${x}" y2="340"/>`;
+    for(let y=0;y<=340;y+=50) h += `<line x1="0" y1="${y}" x2="500" y2="${y}"/>`;
+    h += '</g>';
+
+    // polygon
+    h += `<polygon points="${polyStr}" fill="rgba(91,184,255,.08)" stroke="#f0d64b" stroke-width="2.2" stroke-linejoin="round"/>`;
+    h += '<g fill="#ff6e3a">';
+    for(const p of V) h += `<circle cx="${p[0]}" cy="${p[1]}" r="5"/>`;
+    h += '</g>';
+
+    if(step >= 1){
+      // diagonal
+      h += `<line x1="${V[0][0]}" y1="${V[0][1]}" x2="${V[2][0]}" y2="${V[2][1]}" stroke="#5cb8ff" stroke-width="1.8"/>`;
+      // triangle edges (outline already drawn as polygon)
+      h += `<text x="${bary[0][0]}" y="${bary[0][1]+5}" text-anchor="middle" font-size="14" fill="#5cb8ff" font-weight="600">T0</text>`;
+      h += `<text x="${bary[1][0]}" y="${bary[1][1]+5}" text-anchor="middle" font-size="14" fill="#5cb8ff" font-weight="600">T1</text>`;
+    }
+
+    if(step >= 2){
+      // barycenters
+      for(const b of bary)
+        h += `<circle cx="${b[0]}" cy="${b[1]}" r="7" fill="#4bcc6a" stroke="#2a7a3a" stroke-width="1.5"/>`;
+      // pinf
+      h += `<circle cx="${pinf[0]}" cy="${pinf[1]}" r="9" fill="#e85454" stroke="#a03030" stroke-width="1.5"/>`;
+      h += `<text x="${pinf[0]}" y="${pinf[1]-14}" text-anchor="middle" font-size="13" fill="#e85454" font-weight="700">P&infin;</text>`;
+    }
+
+    if(step >= 3){
+      // internal edge
+      h += `<line x1="${bary[0][0]}" y1="${bary[0][1]}" x2="${bary[1][0]}" y2="${bary[1][1]}" stroke="#4bcc6a" stroke-width="2.5"/>`;
+    }
+
+    if(step >= 4){
+      // external edges
+      for(const b of bary){
+        h += `<line x1="${b[0]}" y1="${b[1]}" x2="${pinf[0]}" y2="${pinf[1]}" stroke="#e85454" stroke-width="2" stroke-dasharray="6,4"/>`;
+      }
+    }
+
+    svg.innerHTML = h;
+  }
+
+  drawStep(0);
+  window.showDualStep = function(s){
+    drawStep(s);
+    document.querySelectorAll('#figDual .step-btn').forEach((b,i)=>{
+      b.classList.toggle('active',i===s);
+    });
+  };
+})();
+
+// ============================================================
+//  INTERACTIVE CANVAS: draw, triangulate, dual graph
+// ============================================================
+(function(){
+  const canvas = document.getElementById('interactiveCanvas');
+  const ctx = canvas.getContext('2d');
+  let points = [];
+  let closed = false;
+  let triangles = [];
+  let dualEdges = [];
+  let barycenters = [];
+  let boundaryFlags = [];
+  let pinf = null;
+  let layers = {poly:true, tri:true, dual:true};
+
+  function getPos(e){
+    const r = canvas.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  }
+
+  canvas.addEventListener('click', function(e){
+    if(closed) return;
+    const [x,y] = getPos(e);
+    points.push([x,y]);
+    draw();
+  });
+
+  canvas.addEventListener('contextmenu', function(e){
+    e.preventDefault();
+    if(points.length < 3 || closed) return;
+    closed = true;
+    triangulatePolygon();
+    buildDual();
+    document.getElementById('layerToggles').style.display = 'flex';
+    draw();
+  });
+
+  window.clearCanvas = function(){
+    points = []; closed = false; triangles = []; dualEdges = [];
+    barycenters = []; boundaryFlags = []; pinf = null;
+    layers = {poly:true, tri:true, dual:true};
+    document.getElementById('layerToggles').style.display = 'none';
+    document.querySelectorAll('#layerToggles .step-btn').forEach(b=>b.classList.add('active'));
+    draw();
+  };
+
+  window.toggleLayer = function(name){
+    layers[name] = !layers[name];
+    document.getElementById('toggle'+name.charAt(0).toUpperCase()+name.slice(1))
+      .classList.toggle('active', layers[name]);
+    draw();
+  };
+
+  // Ear-clipping triangulation
+  function triangulatePolygon(){
+    triangles = [];
+    if(points.length < 3) return;
+    const idx = [];
+    for(let i=0;i<points.length;i++) idx.push(i);
+
+    function cross(o,a,b){
+      return (points[a][0]-points[o][0])*(points[b][1]-points[o][1])
+            -(points[a][1]-points[o][1])*(points[b][0]-points[o][0]);
+    }
+    function pointInTriangle(p,a,b,c){
+      const d1=cross(p,a,b), d2=cross(p,b,c), d3=cross(p,c,a);
+      const hasNeg=(d1<0)||(d2<0)||(d3<0);
+      const hasPos=(d1>0)||(d2>0)||(d3>0);
+      return !(hasNeg&&hasPos);
+    }
+    function isEar(arr,i){
+      const n=arr.length;
+      const prev=arr[(i-1+n)%n], cur=arr[i], next=arr[(i+1)%n];
+      if(cross(prev,cur,next)<=0) return false;
+      for(let j=0;j<n;j++){
+        if(j===(i-1+n)%n||j===i||j===(i+1)%n) continue;
+        if(pointInTriangle(arr[j],prev,cur,next)) return false;
+      }
+      return true;
+    }
+
+    const remaining = [...idx];
+    let safety = remaining.length * 3;
+    while(remaining.length > 3 && safety-- > 0){
+      const n = remaining.length;
+      let found = false;
+      for(let i=0;i<n;i++){
+        if(isEar(remaining,i)){
+          const prev = remaining[(i-1+n)%n];
+          const cur = remaining[i];
+          const next = remaining[(i+1)%n];
+          triangles.push([prev,cur,next]);
+          remaining.splice(i,1);
+          found = true;
+          break;
+        }
+      }
+      if(!found) break;
+    }
+    if(remaining.length === 3){
+      triangles.push([remaining[0],remaining[1],remaining[2]]);
+    }
+  }
+
+  function buildDual(){
+    dualEdges = [];
+    barycenters = [];
+    boundaryFlags = [];
+    pinf = null;
+    if(triangles.length === 0) return;
+
+    // barycenters
+    for(const t of triangles){
+      barycenters.push([
+        (points[t[0]][0]+points[t[1]][0]+points[t[2]][0])/3,
+        (points[t[0]][1]+points[t[1]][1]+points[t[2]][1])/3
+      ]);
+    }
+
+    // edge map
+    const edgeMap = {};
+    function ek(a,b){ return Math.min(a,b)+','+Math.max(a,b); }
+    for(let ti=0;ti<triangles.length;ti++){
+      const t=triangles[ti];
+      for(let j=0;j<3;j++){
+        const key = ek(t[j], t[(j+1)%3]);
+        if(!edgeMap[key]) edgeMap[key]=[];
+        edgeMap[key].push(ti);
+      }
+    }
+
+    boundaryFlags = new Array(triangles.length).fill(false);
+    const internalEdges = [];
+    const externalEdges = [];
+
+    for(const key in edgeMap){
+      const tris = edgeMap[key];
+      if(tris.length === 2){
+        internalEdges.push([tris[0], tris[1]]);
+      } else if(tris.length === 1){
+        boundaryFlags[tris[0]] = true;
+        externalEdges.push(tris[0]);
+      }
+    }
+
+    // pinf position
+    let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
+    for(const p of points){
+      if(p[0]<xmin)xmin=p[0]; if(p[0]>xmax)xmax=p[0];
+      if(p[1]<ymin)ymin=p[1]; if(p[1]>ymax)ymax=p[1];
+    }
+    const cx=(xmin+xmax)/2, cy=(ymin+ymax)/2;
+    const dx=xmax-xmin, dy=ymax-ymin;
+    pinf = [Math.min(cx + 1.5*dx, canvas.width-30), Math.min(cy + 1.5*dy, canvas.height-20)];
+
+    dualEdges = {internal: internalEdges, external: externalEdges};
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // grid
+    ctx.strokeStyle='#2a2a3a'; ctx.lineWidth=0.5;
+    for(let x=0;x<=canvas.width;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
+    for(let y=0;y<=canvas.height;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
+
+    if(points.length === 0) return;
+
+    // polygon layer
+    if(layers.poly){
+      ctx.strokeStyle = closed ? '#f0d64b' : '#4bcc6a';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for(let i=1;i<points.length;i++) ctx.lineTo(points[i][0], points[i][1]);
+      if(closed) ctx.closePath();
+      ctx.stroke();
+
+      if(closed){
+        ctx.fillStyle = 'rgba(91,184,255,.07)';
+        ctx.beginPath();
+        ctx.moveTo(points[0][0], points[0][1]);
+        for(let i=1;i<points.length;i++) ctx.lineTo(points[i][0], points[i][1]);
+        ctx.closePath(); ctx.fill();
+      }
+
+      for(const p of points){
+        ctx.beginPath(); ctx.arc(p[0],p[1],5,0,Math.PI*2);
+        ctx.fillStyle='#ff6e3a'; ctx.fill();
+      }
+    }
+
+    // triangulation layer
+    if(layers.tri && closed){
+      ctx.strokeStyle='#5cb8ff'; ctx.lineWidth=1.2;
+      for(const t of triangles){
+        ctx.beginPath();
+        ctx.moveTo(points[t[0]][0], points[t[0]][1]);
+        ctx.lineTo(points[t[1]][0], points[t[1]][1]);
+        ctx.lineTo(points[t[2]][0], points[t[2]][1]);
+        ctx.closePath(); ctx.stroke();
+      }
+    }
+
+    // dual graph layer
+    if(layers.dual && closed && barycenters.length > 0){
+      // internal edges
+      if(dualEdges.internal){
+        ctx.strokeStyle='#4bcc6a'; ctx.lineWidth=2.2;
+        for(const [a,b] of dualEdges.internal){
+          ctx.beginPath();
+          ctx.moveTo(barycenters[a][0], barycenters[a][1]);
+          ctx.lineTo(barycenters[b][0], barycenters[b][1]);
+          ctx.stroke();
+        }
+      }
+      // external edges
+      if(dualEdges.external && pinf){
+        ctx.strokeStyle='#e85454'; ctx.lineWidth=1.8;
+        ctx.setLineDash([6,4]);
+        for(const ti of dualEdges.external){
+          ctx.beginPath();
+          ctx.moveTo(barycenters[ti][0], barycenters[ti][1]);
+          ctx.lineTo(pinf[0], pinf[1]);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+      // barycenters
+      for(let i=0;i<barycenters.length;i++){
+        ctx.beginPath(); ctx.arc(barycenters[i][0], barycenters[i][1], 6, 0, Math.PI*2);
+        ctx.fillStyle='#4bcc6a'; ctx.fill();
+        ctx.strokeStyle='#2a7a3a'; ctx.lineWidth=1.2; ctx.stroke();
+        // label
+        ctx.fillStyle='#fff'; ctx.font='bold 10px monospace'; ctx.textAlign='center';
+        ctx.fillText('T'+i, barycenters[i][0], barycenters[i][1]-10);
+      }
+      // pinf
+      if(pinf){
+        ctx.beginPath(); ctx.arc(pinf[0], pinf[1], 8, 0, Math.PI*2);
+        ctx.fillStyle='#e85454'; ctx.fill();
+        ctx.strokeStyle='#a03030'; ctx.lineWidth=1.5; ctx.stroke();
+        ctx.fillStyle='#fff'; ctx.font='bold 11px monospace'; ctx.textAlign='center';
+        ctx.fillText('P\u221E', pinf[0], pinf[1]-12);
+      }
+    }
+  }
+
+  draw();
+})();
+
+// ============================================================
+//  Sticky nav highlight
+// ============================================================
+(function(){
+  const links = document.querySelectorAll('nav.toc a');
+  const sections = [];
+  links.forEach(a => {
+    const s = document.querySelector(a.getAttribute('href'));
+    if(s) sections.push({el:s, link:a});
+  });
+  window.addEventListener('scroll', function(){
+    const y = window.scrollY + 80;
+    let current = sections[0];
+    for(const s of sections){
+      if(s.el.offsetTop <= y) current = s;
+    }
+    links.forEach(a => a.classList.remove('active'));
+    if(current) current.link.classList.add('active');
+  });
+})();
+</script>
+</body>
+</html>

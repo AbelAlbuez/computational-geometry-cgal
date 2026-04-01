@@ -36,13 +36,16 @@ taller-dual-graph/
 │   ├── 02_cuadrado_ccw.obj
 │   ├── 03_cuadrado_cw.obj
 │   ├── 04_pentagono_regular.obj
-│   ├── 05_L.obj
-│   ├── 06_T.obj
-│   ├── 07_diente.obj
+│   ├── 05_hexagono_regular.obj
+│   ├── 06_forma_L.obj
+│   ├── 07_forma_T.obj
 │   ├── 08_flecha.obj
-│   ├── 09_escalera.obj
+│   ├── 09_peine.obj
+│   ├── 10_irregular_convexo.obj
 │   ├── poly_00.obj
-│   └── poly_01.obj             — polígono de 21 vértices (dibujado con polygon_drawer)
+│   ├── poly_01.obj             — polígono de 21 vértices (dibujado con polygon_drawer)
+│   ├── test_square.obj
+│   └── test_Lshape.obj
 ├── lib/
 │   └── pujCGAL/
 │       ├── Polygon.h / .hxx

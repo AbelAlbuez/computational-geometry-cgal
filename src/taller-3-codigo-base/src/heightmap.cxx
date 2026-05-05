@@ -58,9 +58,16 @@ int main( int argc, char** argv )
     v->info( ) = hm( i.first, i.second );
   } // end for
 
-  // Construir la ruta de output/ un nivel arriba del ejecutable (build/ -> src/)
+  // Construir nombre del test desde el PNG de entrada
+  std::filesystem::path input_path( argv[ 1 ] );
+  std::string test_name = input_path.stem( ).string( );
+
+  // Construir output_dir con subcarpeta por imagen
   std::filesystem::path exe_path = std::filesystem::canonical( argv[ 0 ] );
-  std::filesystem::path output_dir = exe_path.parent_path( ).parent_path( ) / "output";
+  std::filesystem::path output_dir =
+    exe_path.parent_path( ).parent_path( )
+    / "output"
+    / ( "test-" + test_name );
   std::filesystem::create_directories( output_dir );
 
   // IO::save usa v->info() como indice OBJ. Guardamos y restauramos alturas
@@ -230,6 +237,7 @@ int main( int argc, char** argv )
   std::cout << "Vertices despues: " << after   << std::endl;
   std::cout << "Reduccion:        " << std::fixed << std::setprecision( 1 )
             << reduction << "%" << std::endl;
+  std::cout << "Output en: " << output_dir.string( ) << std::endl;
 
   // =========================================================================
 
@@ -241,6 +249,8 @@ int main( int argc, char** argv )
     + ( exe_path.parent_path( ).parent_path( ) / "visualizer.py" ).string( )
     + "\" --output \""
     + output_dir.string( )
+    + "\" --name \""
+    + test_name
     + "\"";
   std::system( visualizer_cmd.c_str( ) );
     

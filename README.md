@@ -104,23 +104,65 @@ Calcula la intersección de dos polígonos convexos usando el algoritmo de recor
 
 ### Descripción
 
-Lee una imagen PNG como heightmap, construye una triangulación de Delaunay 2D sobre los píxeles y **simplifica** la malla eliminando vértices redundantes (zonas planas), conservando los vértices importantes (bordes, crestas, valles).
+Lee una imagen PNG como heightmap, construye una triangulación de Delaunay 2D
+sobre los píxeles y simplifica la malla eliminando vértices redundantes en zonas
+planas, conservando los que definen el relieve del terreno (bordes, crestas, valles).
 
-**Algoritmo:** para cada vértice `p` se calcula un error de planitud = promedio de `|h(p) - h(q)|` sobre sus vecinos `q`. Se usa un min-heap (estilo Dijkstra) para procesar primero los vértices con menor error. Si `error(p) < ε`, el vértice es eliminado con `T.remove(p)` y CGAL re-triangula el hueco automáticamente (Delaunay local). Los errores de los vecinos de `p` en la vecindad de orden k se recalculan y reinsertan en el heap (lazy update).
+### Algoritmo
 
-**Nota:** los valores de altura quedan normalizados a `[0, 1]` por la clase `pujCGAL::Heightmap`, por lo que `epsilon` debe estar en ese rango. Un valor típico es `0.02`–`0.10`.
+Para cada vértice `p` se calcula un **error de planitud**:
+
+```
+error(p) = promedio de |p.z - qi.z| para cada vecino qi
+```
+
+Se usa un **min-heap (Dijkstra)** para procesar primero los vértices de menor error.
+Si `error(p) < ε`, el vértice se elimina con `T.remove(p)` y CGAL re-triangula el
+hueco automáticamente (Delaunay local). Los errores de los vecinos en la vecindad
+de orden k se recalculan y reinsertan en el heap (**lazy update**).
 
 ### Conceptos del curso aplicados
 
 | Concepto | Aplicación |
 |---|---|
-| **DCEL / half-edge** (Clase 6) | `Face_circulator` de CGAL recorre la estrella de p en orden circular (twin→next) |
-| **Triangulación de Delaunay** (Clase 5) | La malla de partida y la re-triangulación automática tras cada remoción |
+| **DCEL / half-edge** (Clase 6) | `Face_circulator` recorre la estrella de p con twin→next |
+| **Triangulación de Delaunay** (Clase 5) | Malla base y re-triangulación automática tras cada remoción |
+| **Dualidad Voronoi-Delaunay** (Clase 5) | Eliminar un vértice fusiona celdas de Voronoi vecinas |
+| **Face-vertex mesh** (Clase 6) | Estructura interna de la triangulación CGAL |
 | **Min-heap (Dijkstra)** | Orden de procesamiento: menor error de planitud sale primero |
-| **Dualidad Voronoi-Delaunay** (Clase 5) | Eliminar un vértice equivale a fusionar celdas de Voronoi vecinas |
-| **Face-vertex mesh** (Clase 6) | La triangulación CGAL es exactamente esta estructura |
 
-### Compilar (Taller 3)
+### Estructura del taller
+
+```
+src/taller-3-codigo-base/
+├── src/
+│   └── heightmap.cxx          ← algoritmo principal
+├── lib/
+│   └── pujCGAL/               ← librería del profesor
+├── data/                      ← imágenes PNG de entrada
+├── output/                    ← mallas .obj + visualizaciones por imagen
+│   └── test-[nombre]/
+│       ├── original.obj
+│       ├── simplificado.obj
+│       ├── paso_01.png .. paso_07.png
+│       ├── resultado.gif
+│       └── paso_a_paso.gif
+├── diagramas/                 ← diagramas explicativos del algoritmo
+│   ├── 01_criterio_planitud.png
+│   ├── 02_face_circulator.png
+│   ├── 03_min_heap.png
+│   ├── 04_remove_retrigulacion.png
+│   ├── 05_lazy_deletion.png
+│   ├── 06_vecindad_orden_k.png
+│   ├── 07_resultados.png
+│   └── algoritmo_completo.gif
+├── generar_diagramas.py       ← script que genera los diagramas
+├── visualizer.py              ← genera GIFs paso a paso por imagen
+├── requirements.txt           ← dependencias Python
+└── CMakeLists.txt
+```
+
+### Compilar
 
 ```bash
 cd src/taller-3-codigo-base
@@ -142,28 +184,68 @@ sudo apt-get install cmake libcgal-dev libpng-dev
 ### Ejecutar
 
 ```bash
-./taller3 input.png output.obj [epsilon] [orden_k]
+# Desde build/
+./taller3 <input.png> <epsilon> <orden_k>
 ```
 
-| Parámetro | Descripción | Valor por defecto |
+| Parámetro | Descripción | Rango útil |
 |---|---|---|
 | `input.png` | Imagen PNG de entrada (heightmap) | — |
-| `output.obj` | Malla simplificada en formato OBJ 3D | — |
-| `epsilon` | Umbral de planitud en `[0, 1]` | `10.0` |
-| `orden_k` | Radio de vecindad para actualización | `2` |
+| `epsilon` | Umbral de planitud normalizado a [0,1] | 0.01 – 0.15 |
+| `orden_k` | Radio de vecindad para actualización | 1 – 3 |
 
 **Ejemplo:**
 ```bash
-./taller3 ../../../data/input_00.png output_simplificado.obj 0.05 2
+./taller3 "../../../data/SRTM_US_scaled_512.png" 0.05 2
 ```
 
-### Resultados — `data/input_00.png` (500×333 px, RGB)
+### Resultados (ε = 0.05, orden_k = 2)
 
-| epsilon | orden\_k | Vértices antes | Vértices después | Reducción |
-|---|---|---|---|---|
-| 0.02 | 2 | 166 500 | 14 727 | 91.2 % |
-| 0.05 | 2 | 166 500 | 13 831 | 91.7 % |
-| 10.0 | 2 | 166 500 | 4 | ~100 % (degenera) |
+| Imagen | Vértices antes | Vértices después | Reducción |
+|---|---:|---:|---:|
+| SRTM_US_scaled_256.png | 32,768 | 4,840 | **85.2%** |
+| SRTM_US_scaled_512.png | 131,072 | 14,190 | **89.2%** |
+| NormalMap-second.png | 196,608 | 22,352 | **88.6%** |
+| NormalMap.png | 262,144 | 1,647 | **99.4%** |
+| SRTM_US_scaled_1024.png | 524,288 | 37,188 | **92.9%** |
+| SRTM_US_scaled_2048.png | 2,097,152 | 81,758 | **96.1%** |
+
+### Generar diagramas explicativos
+
+```bash
+cd src/taller-3-codigo-base
+
+# Crear entorno virtual
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Generar los 7 PNGs + GIF animado
+python3 generar_diagramas.py
+
+deactivate
+```
+
+Los archivos quedan en `src/taller-3-codigo-base/diagramas/`.
+
+### Visualizador paso a paso
+
+```bash
+# Se ejecuta automáticamente después de cada taller3
+# También puede ejecutarse manualmente:
+python3 visualizer.py --output output/test-[nombre] --name [nombre]
+```
+
+Genera un GIF de 7 pasos que muestra:
+1. Malla original densa
+2. Heatmap de error de planitud (verde=plano, rojo=borde)
+3. Vértice más plano resaltado (Dijkstra)
+4. Estrella con Face_circulator
+5. Expansión a orden k
+6. Estado intermedio de eliminación
+7. Resultado final simplificado
 
 ---
 

@@ -166,9 +166,9 @@ def render_paso3(vo, fo, path):
     if t is not None:
         ax.tripcolor(t, vo[:, 2], cmap="terrain", shading="gouraud", alpha=0.7)
         ax.triplot(t, color="#378ADD", linewidth=0.15, alpha=0.3)
-        mean_z = vo[:, 2].mean()
-        flat_idx = np.argmin(np.abs(vo[:, 2] - mean_z))
-        ax.scatter(vo[flat_idx, 0], vo[flat_idx, 1], c="#FF4444", s=80, zorder=5, label="vertice mas plano")
+        centroid = vo[:, :2].mean(axis=0)
+        cx = int(np.argmin(np.sum((vo[:, :2] - centroid) ** 2, axis=1)))
+        ax.scatter(vo[cx, 0], vo[cx, 1], c="#FF4444", s=80, zorder=5, label="vertice mas plano")
         ax.legend(loc="upper right", facecolor="#222", labelcolor="white", fontsize=8)
     ax.axis("equal")
     ax.axis("off")
@@ -182,7 +182,8 @@ def render_paso4(vo, fo, path):
     if t is not None:
         ax.tripcolor(t, vo[:, 2], cmap="terrain", shading="gouraud", alpha=0.4)
         ax.triplot(t, color="#378ADD", linewidth=0.15, alpha=0.2)
-        cx = len(vo) // 2
+        centroid = vo[:, :2].mean(axis=0)
+        cx = int(np.argmin(np.sum((vo[:, :2] - centroid) ** 2, axis=1)))
         star_faces = [f for f in fo if cx in f][:12]
         for f in star_faces:
             pts = vo[f, :2]
@@ -201,7 +202,8 @@ def render_paso5(vo, fo, path):
     if t is not None:
         ax.tripcolor(t, vo[:, 2], cmap="terrain", shading="gouraud", alpha=0.35)
         ax.triplot(t, color="#378ADD", linewidth=0.12, alpha=0.2)
-        cx = len(vo) // 2
+        centroid = vo[:, :2].mean(axis=0)
+        cx = int(np.argmin(np.sum((vo[:, :2] - centroid) ** 2, axis=1)))
         ring1 = set()
         star1 = [f for f in fo if cx in f]
         for f in star1:

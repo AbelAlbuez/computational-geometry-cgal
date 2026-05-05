@@ -1,5 +1,7 @@
 
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <queue>
@@ -26,10 +28,10 @@ int main( int argc, char** argv )
   using TVertexHandle = TDelaunay::Vertex_handle;
   using TFaceCirculator = TDelaunay::Face_circulator;
 
-  if( argc < 3 )
+  if( argc < 2 )
   {
     std::cerr << "Uso: " << argv[ 0 ]
-              << " input.png output.obj [epsilon] [orden_k]" << std::endl;
+              << " input.png [epsilon] [orden_k]" << std::endl;
     return( EXIT_FAILURE );
   } // end if
 
@@ -56,6 +58,18 @@ int main( int argc, char** argv )
     v->info( ) = hm( i.first, i.second );
   } // end for
 
+  std::filesystem::create_directories( "output" );
+
+  // IO::save usa v->info() como indice OBJ. Guardamos y restauramos alturas
+  // para no alterar el criterio de planitud del algoritmo.
+  std::unordered_map< TVertexHandle, TReal > original_heights;
+  for( auto v = T.finite_vertices_begin( ); v != T.finite_vertices_end( ); ++v )
+    original_heights[ v ] = v->info( );
+
+  pujCGAL::IO::save( T, "output/original.obj" );
+  for( auto v = T.finite_vertices_begin( ); v != T.finite_vertices_end( ); ++v )
+    v->info( ) = original_heights[ v ];
+
   // =========================================================================
   // Taller 3: Simplificación por vecindad de orden k
   //
@@ -71,8 +85,8 @@ int main( int argc, char** argv )
   // =========================================================================
 
   // Parámetros: epsilon (umbral de planitud) y orden_k (radio de vecindad)
-  const double epsilon = ( argc > 3 ) ? std::stod( argv[ 3 ] ) : 10.0;
-  const int    orden_k = ( argc > 4 ) ? std::stoi( argv[ 4 ] ) : 2;
+  const double epsilon = ( argc > 2 ) ? std::stod( argv[ 2 ] ) : 10.0;
+  const int    orden_k = ( argc > 3 ) ? std::stoi( argv[ 3 ] ) : 2;
 
   // --- Función lambda: calcula el error de planitud de un vértice v
   //     usando la estrella (Face_circulator ~ half-edge twin→next).
@@ -216,7 +230,8 @@ int main( int argc, char** argv )
 
   // =========================================================================
 
-  pujCGAL::IO::save( T, argv[ 2 ] );
+  pujCGAL::IO::save( T, "output/simplificado.obj" );
+  std::system( "python3 ../visualizer.py" );
     
   return( EXIT_SUCCESS );
 }

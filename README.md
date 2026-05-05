@@ -100,6 +100,73 @@ Calcula la intersección de dos polígonos convexos usando el algoritmo de recor
 
 ---
 
+## Taller 3 — Simplificación de Heightmap por Vecindad de Orden k
+
+### Descripción
+
+Lee una imagen PNG como heightmap, construye una triangulación de Delaunay 2D sobre los píxeles y **simplifica** la malla eliminando vértices redundantes (zonas planas), conservando los vértices importantes (bordes, crestas, valles).
+
+**Algoritmo:** para cada vértice `p` se calcula un error de planitud = promedio de `|h(p) - h(q)|` sobre sus vecinos `q`. Se usa un min-heap (estilo Dijkstra) para procesar primero los vértices con menor error. Si `error(p) < ε`, el vértice es eliminado con `T.remove(p)` y CGAL re-triangula el hueco automáticamente (Delaunay local). Los errores de los vecinos de `p` en la vecindad de orden k se recalculan y reinsertan en el heap (lazy update).
+
+**Nota:** los valores de altura quedan normalizados a `[0, 1]` por la clase `pujCGAL::Heightmap`, por lo que `epsilon` debe estar en ese rango. Un valor típico es `0.02`–`0.10`.
+
+### Conceptos del curso aplicados
+
+| Concepto | Aplicación |
+|---|---|
+| **DCEL / half-edge** (Clase 6) | `Face_circulator` de CGAL recorre la estrella de p en orden circular (twin→next) |
+| **Triangulación de Delaunay** (Clase 5) | La malla de partida y la re-triangulación automática tras cada remoción |
+| **Min-heap (Dijkstra)** | Orden de procesamiento: menor error de planitud sale primero |
+| **Dualidad Voronoi-Delaunay** (Clase 5) | Eliminar un vértice equivale a fusionar celdas de Voronoi vecinas |
+| **Face-vertex mesh** (Clase 6) | La triangulación CGAL es exactamente esta estructura |
+
+### Compilar (Taller 3)
+
+```bash
+cd src/taller-3-codigo-base
+mkdir -p build && cd build
+cmake ..
+make
+```
+
+Requiere: `cmake`, `CGAL`, `libpng`.
+
+```bash
+# macOS
+brew install cmake cgal libpng
+
+# Ubuntu / Debian
+sudo apt-get install cmake libcgal-dev libpng-dev
+```
+
+### Ejecutar
+
+```bash
+./taller3 input.png output.obj [epsilon] [orden_k]
+```
+
+| Parámetro | Descripción | Valor por defecto |
+|---|---|---|
+| `input.png` | Imagen PNG de entrada (heightmap) | — |
+| `output.obj` | Malla simplificada en formato OBJ 3D | — |
+| `epsilon` | Umbral de planitud en `[0, 1]` | `10.0` |
+| `orden_k` | Radio de vecindad para actualización | `2` |
+
+**Ejemplo:**
+```bash
+./taller3 ../../../data/input_00.png output_simplificado.obj 0.05 2
+```
+
+### Resultados — `data/input_00.png` (500×333 px, RGB)
+
+| epsilon | orden\_k | Vértices antes | Vértices después | Reducción |
+|---|---|---|---|---|
+| 0.02 | 2 | 166 500 | 14 727 | 91.2 % |
+| 0.05 | 2 | 166 500 | 13 831 | 91.7 % |
+| 10.0 | 2 | 166 500 | 4 | ~100 % (degenera) |
+
+---
+
 ### `polygon_intersection_cgal` — CGAL nativo
 
 Misma operación usando `CGAL::Polygon_2` y `CGAL::intersection` con kernel de aritmética exacta.

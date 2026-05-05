@@ -58,7 +58,10 @@ int main( int argc, char** argv )
     v->info( ) = hm( i.first, i.second );
   } // end for
 
-  std::filesystem::create_directories( "output" );
+  // Construir la ruta de output/ un nivel arriba del ejecutable (build/ -> src/)
+  std::filesystem::path exe_path = std::filesystem::canonical( argv[ 0 ] );
+  std::filesystem::path output_dir = exe_path.parent_path( ).parent_path( ) / "output";
+  std::filesystem::create_directories( output_dir );
 
   // IO::save usa v->info() como indice OBJ. Guardamos y restauramos alturas
   // para no alterar el criterio de planitud del algoritmo.
@@ -66,7 +69,7 @@ int main( int argc, char** argv )
   for( auto v = T.finite_vertices_begin( ); v != T.finite_vertices_end( ); ++v )
     original_heights[ v ] = v->info( );
 
-  pujCGAL::IO::save( T, "output/original.obj" );
+  pujCGAL::IO::save( T, ( output_dir / "original.obj" ).string( ) );
   for( auto v = T.finite_vertices_begin( ); v != T.finite_vertices_end( ); ++v )
     v->info( ) = original_heights[ v ];
 
@@ -230,8 +233,16 @@ int main( int argc, char** argv )
 
   // =========================================================================
 
-  pujCGAL::IO::save( T, "output/simplificado.obj" );
-  std::system( "python3 ../visualizer.py" );
+  pujCGAL::IO::save( T, ( output_dir / "simplificado.obj" ).string( ) );
+
+  // Llamar al visualizer con ruta absoluta
+  std::string visualizer_cmd =
+    "python3 \""
+    + ( exe_path.parent_path( ).parent_path( ) / "visualizer.py" ).string( )
+    + "\" --output \""
+    + output_dir.string( )
+    + "\"";
+  std::system( visualizer_cmd.c_str( ) );
     
   return( EXIT_SUCCESS );
 }

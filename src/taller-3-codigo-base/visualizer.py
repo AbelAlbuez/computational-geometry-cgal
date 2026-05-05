@@ -6,6 +6,7 @@ renderiza ambas mallas como imagenes y genera output/resultado.gif
 """
 
 import os
+import argparse
 
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
@@ -56,10 +57,22 @@ def render_mesh(verts, faces, title, output_path):
 
 
 def main():
-    os.makedirs("output", exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--output",
+        default="output",
+        help="Directorio con los .obj generados",
+    )
+    args = parser.parse_args()
+    output_dir = args.output
 
-    original_path = "output/original.obj"
-    simplificado_path = "output/simplificado.obj"
+    os.makedirs(output_dir, exist_ok=True)
+
+    original_path = os.path.join(output_dir, "original.obj")
+    simplificado_path = os.path.join(output_dir, "simplificado.obj")
+    gif_path = os.path.join(output_dir, "resultado.gif")
+    frame1_path = os.path.join(output_dir, "frame_original.png")
+    frame2_path = os.path.join(output_dir, "frame_simplificado.png")
 
     if not os.path.exists(original_path) or not os.path.exists(simplificado_path):
         print("Error: no se encontraron los archivos .obj en output/")
@@ -75,28 +88,28 @@ def main():
         verts_orig,
         faces_orig,
         f"Original ({len(verts_orig)} vertices)",
-        "output/frame_original.png",
+        frame1_path,
     )
     render_mesh(
         verts_simp,
         faces_simp,
         f"Simplificado ({len(verts_simp)} vertices)",
-        "output/frame_simplificado.png",
+        frame2_path,
     )
 
     print("Generando GIF...")
     frames = [
-        Image.open("output/frame_original.png"),
-        Image.open("output/frame_simplificado.png"),
+        Image.open(frame1_path),
+        Image.open(frame2_path),
     ]
     frames[0].save(
-        "output/resultado.gif",
+        gif_path,
         save_all=True,
         append_images=frames[1:],
         duration=1200,
         loop=0,
     )
-    print("GIF guardado en output/resultado.gif")
+    print(f"GIF guardado en {gif_path}")
 
 
 if __name__ == "__main__":

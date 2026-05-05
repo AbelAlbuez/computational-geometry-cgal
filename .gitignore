@@ -4,6 +4,16 @@ build/
 # Taller dual-graph: salidas del visualizer (result-NNN/, PNGs, GIF, concat ffmpeg)
 src/taller-dual-graph/output/
 
+# Taller 3: outputs generados (OBJ, PNG, GIF por imagen)
+src/taller-3-codigo-base/output/
+
+# First test outputs
+src/first-test/output/
+src/first-test-python/output/
+
+# Archivos comprimidos
+*.zip
+
 # Docs / bitácora (personal notes, not for version control)
 docs/
 

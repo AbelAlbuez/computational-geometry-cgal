@@ -144,8 +144,8 @@ int main( int argc, char** argv )
     auto [err, p] = heap.top( );
     heap.pop( );
 
-    // Caso límite: heap vacío o umbral superado — detener
-    if( err >= epsilon ) break;
+    // Caso límite: entrada con error sobre umbral, pero continuar por lazy heap
+    if( err >= epsilon ) continue;
 
     // Saltar si ya fue procesado (lazy deletion del heap)
     if( visited.count( p ) ) continue;

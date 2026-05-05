@@ -1,0 +1,5 @@
+matplotlib
+mapbox-earcut
+numpy
+Pillow
+scipy

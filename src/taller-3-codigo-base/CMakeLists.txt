@@ -17,8 +17,11 @@ include_directories(
 find_package(CGAL REQUIRED)
 find_package(PNG REQUIRED)
 
-# -- Executable
+# -- Executables
 add_executable(taller3 src/heightmap.cxx)
 target_link_libraries(taller3 CGAL::CGAL PNG::PNG)
+
+add_executable(comparador src/comparador.cxx)
+target_link_libraries(comparador CGAL::CGAL PNG::PNG)
 
 ## eof - CMakeLists.txt

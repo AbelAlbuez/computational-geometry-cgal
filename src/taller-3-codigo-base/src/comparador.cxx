@@ -101,7 +101,7 @@ int main( int argc, char** argv )
     return( EXIT_FAILURE );
   } // end if
 
-  const double epsilon = ( argc > 2 ) ? std::stod( argv[ 2 ] ) : 0.05;
+  const double epsilon = ( argc > 2 ) ? std::stod( argv[ 2 ] ) : 10.0;
   const int    orden_k = ( argc > 3 ) ? std::stoi( argv[ 3 ] ) : 2;
   const int    paso    = ( argc > 4 ) ? std::stoi( argv[ 4 ] ) : 8;
 

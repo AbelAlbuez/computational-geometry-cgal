@@ -24,4 +24,7 @@ target_link_libraries(taller3 CGAL::CGAL PNG::PNG)
 add_executable(comparador src/comparador.cxx)
 target_link_libraries(comparador CGAL::CGAL PNG::PNG)
 
+add_executable(batch_runner src/batch_runner.cxx)
+target_link_libraries(batch_runner CGAL::CGAL PNG::PNG)
+
 ## eof - CMakeLists.txt

@@ -27,4 +27,7 @@ foreach(_e ${_execs})
   target_link_libraries(pujCGAL_${_e} PNG::PNG CGAL::CGAL)
 endforeach()
 
+add_executable(batch_runner src/batch_runner.cxx)
+target_link_libraries(batch_runner CGAL::CGAL PNG::PNG)
+
 ## eof - CMakeLists.txt

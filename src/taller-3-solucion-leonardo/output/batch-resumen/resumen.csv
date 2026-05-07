@@ -1,0 +1,2 @@
+imagen,width,height,vertices_antes,vertices_despues,reduccion_pct,tiempo_etapa1_ms,tiempo_etapa2_ms
+SRTM_US_scaled_512,512,256,131072,63601,51.4763,288.921,512.572

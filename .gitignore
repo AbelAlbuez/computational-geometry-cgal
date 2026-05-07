@@ -6,7 +6,9 @@ src/taller-dual-graph/output/
 
 # Taller 3: outputs generados (OBJ, PNG, GIF por imagen)
 src/taller-3-codigo-base/output/
+src/taller-3-solucion-leonardo/output/
 src/taller-3-codigo-base/.venv/
+src/taller-3-solucion-leonardo/.venv/
 
 # First test outputs
 src/first-test/output/

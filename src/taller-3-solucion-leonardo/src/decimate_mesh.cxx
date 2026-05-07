@@ -69,6 +69,9 @@ int main( int argc, char** argv )
 
     TReal d = stats.first - mesh.point( *vIt )[ 2 ];
     TReal s = std::sqrt( stats.second ) * gamma;
+
+
+    // Hay que modificar este codigo para que cuando un punto deba sobrevivir los vecinos mueran pero el punto sobreviva
     if( !( std::fabs( d ) < s ) )
     {
       auto p = mesh.point( *vIt );

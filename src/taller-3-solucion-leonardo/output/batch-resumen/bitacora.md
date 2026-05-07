@@ -14,17 +14,17 @@ En este batch replique el pipeline del profesor en dos etapas. Primero construyo
 ### SRTM_US_scaled_512
 | vertices antes -> despues | reduccion % | tiempo etapa 1 (ms) | tiempo etapa 2 (ms) |
 |---:|---:|---:|---:|
-| 131072 -> 63601 | 51.48 | 288.92 | 512.57 |
+| 131072 -> 49581 | 62.17 | 284.67 | 499.52 |
 
-En esta imagen consegui una reduccion de 51.48%. La etapa 2 tomo mas tiempo que la etapa 1. El resultado me parece razonable para el criterio de filtrado usado.
+En esta imagen consegui una reduccion de 62.17%. La etapa 2 tomo mas tiempo que la etapa 1. El resultado me parece razonable para el criterio de filtrado usado.
 
 PNGs: 4/4 generados (00_heightmap.png, 01_original.png, 02_simplificado.png, 03_comparativo.png)
 
 ## Observaciones globales
 
-- La mayor reduccion fue en SRTM_US_scaled_512 con 51.48%.
-- La menor reduccion fue en SRTM_US_scaled_512 con 51.48%.
+- La mayor reduccion fue en SRTM_US_scaled_512 con 62.17%.
+- La menor reduccion fue en SRTM_US_scaled_512 con 62.17%.
 - La imagen mas grande fue SRTM_US_scaled_512 (131072 pixeles).
 - La imagen mas pequena fue SRTM_US_scaled_512 (131072 pixeles).
-- Tiempo promedio etapa 1: 288.92 ms; etapa 2: 512.57 ms.
+- Tiempo promedio etapa 1: 284.67 ms; etapa 2: 499.52 ms.
 - Imagenes con error durante el batch: 0.

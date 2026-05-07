@@ -31,6 +31,25 @@ using TDelaunayDS = CGAL::Triangulation_data_structure_2< TDelaunayV >;
 using TDelaunay   = CGAL::Delaunay_triangulation_2< TKernel, TDelaunayDS >;
 using TDelaunayP  = TKernel::Point_2;
 
+template< class _TMesh >
+std::pair<
+  typename CGAL::Kernel_traits< typename _TMesh::Point >::Kernel::RT,
+  typename CGAL::Kernel_traits< typename _TMesh::Point >::Kernel::RT
+  >
+compute_neighborhood_stats(
+  const _TMesh& mesh,
+  const typename _TMesh::Vertex_index& vIdx,
+  const std::size_t& order
+  );
+
+template< class _TMesh >
+void marcar_vecinos_como_muertos(
+  const _TMesh& mesh,
+  const typename _TMesh::Vertex_index& v_centro,
+  const std::size_t& order,
+  std::vector< bool >& dead
+  );
+
 // -------------------------------------------------------------------------
 // Copiada de decimate_mesh.cxx (solucion del profesor), sin cambios de logica.
 template< class _TMesh >
@@ -93,6 +112,45 @@ compute_neighborhood_stats(
     return std::make_pair( M, TRealL( 0 ) );
 
   return std::make_pair( M, S / TRealL( K - 1 ) );
+}
+
+template< class _TMesh >
+void marcar_vecinos_como_muertos(
+  const _TMesh& mesh,
+  const typename _TMesh::Vertex_index& v_centro,
+  const std::size_t& order,
+  std::vector< bool >& dead
+  )
+{
+  using TVertex     = typename _TMesh::Vertex_index;
+  using TCirculator = CGAL::Vertex_around_target_circulator< _TMesh >;
+
+  std::vector< bool > visited( mesh.vertices( ).size( ), false );
+
+  std::queue< std::pair< TVertex, std::size_t > > q;
+  q.push( std::make_pair( v_centro, std::size_t( 0 ) ) );
+
+  while( q.size( ) > 0 )
+  {
+    auto n = q.front( );
+    q.pop( );
+
+    if( n.second >= order )                 continue;
+    if( visited[ std::size_t( n.first ) ] ) continue;
+    visited[ std::size_t( n.first ) ] = true;
+
+    if( n.second > 0 )
+      dead[ std::size_t( n.first ) ] = true;
+
+    TCirculator cIt( mesh.halfedge( n.first ), mesh );
+    TCirculator cItEnd( cIt );
+    do
+    {
+      if( !( visited[ std::size_t( *cIt ) ] ) )
+        q.push( std::make_pair( *cIt, n.second + 1 ) );
+      cIt++;
+    } while( cIt != cItEnd );
+  }
 }
 
 struct ResultadoImagen
@@ -204,17 +262,30 @@ static ResultadoImagen procesar_imagen(
 
     std::vector< TDelaunayP > delaunay_points;
     std::vector< TReal > delaunay_heights;
+
+    const std::size_t N = mesh.vertices( ).size( );
+    std::vector< bool > dead( N, false );
+
+    // Pasada 1: para cada p plano, marcar a sus vecinos como muertos.
+    // Si p es importante (fuera de banda) no se hace nada en esta pasada.
+    // Regla: gana el primer "muere"; un vertice marcado no se resucita.
     for( auto vIt = mesh.vertices( ).begin( ); vIt != mesh.vertices( ).end( ); ++vIt )
     {
       auto stats = compute_neighborhood_stats( mesh, *vIt, order );
       TReal d = stats.first - mesh.point( *vIt )[ 2 ];
       TReal s = std::sqrt( stats.second ) * gamma;
-      if( !( std::fabs( d ) < s ) )
-      {
-        auto p = mesh.point( *vIt );
-        delaunay_points.push_back( TDelaunayP( p[ 0 ], p[ 1 ] ) );
-        delaunay_heights.push_back( p[ 2 ] );
-      }
+
+      if( std::fabs( d ) < s )
+        marcar_vecinos_como_muertos( mesh, *vIt, order, dead );
+    }
+
+    // Pasada 2: recolectar todos los vivos.
+    for( auto vIt = mesh.vertices( ).begin( ); vIt != mesh.vertices( ).end( ); ++vIt )
+    {
+      if( dead[ std::size_t( *vIt ) ] ) continue;
+      auto p = mesh.point( *vIt );
+      delaunay_points.push_back( TDelaunayP( p[ 0 ], p[ 1 ] ) );
+      delaunay_heights.push_back( p[ 2 ] );
     }
 
     TDelaunay Td;

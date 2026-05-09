@@ -65,6 +65,15 @@ docs/
 # Python bytecode
 __pycache__/
 *.pyc
+*.pyo
+
+# Python virtual environments
+venv/
+.venv/
+
+# Final project: BraTS data and outputs (no subir al repo)
+src/final-project-interpolation/data/
+src/final-project-interpolation/output/
 
 # macOS
 .DS_Store

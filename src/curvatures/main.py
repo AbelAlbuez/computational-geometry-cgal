@@ -1,94 +1,101 @@
-import math
 import numpy as np
 import matplotlib.pyplot as plt
-from curvatures import I1, I2
 
-def det2(M):
-    return M[0][0] * M[1][1] - M[0][1] * M[1][0]
+from curvatures import Sphere, Ellipsoid, Torus, PlanarCircle
 
-def K_gauss(u, v):
-    I1_mat = I1(u, v)
-    I2_mat = I2(u, v)
-    det_I1 = det2(I1_mat)
-    if abs(det_I1) < 1e-10:
-        return 0.0
-    det_I2 = det2(I2_mat)
-    return det_I2 / det_I1
 
-def H_mean(u, v):
-    I1_mat = I1(u, v)
-    I2_mat = I2(u, v)
-    E, F, G = I1_mat[0][0], I1_mat[0][1], I1_mat[1][1]
-    L, M, N = I2_mat[0][0], I2_mat[0][1], I2_mat[1][1]
-    det_I1 = det2(I1_mat)
-    if abs(det_I1) < 1e-10:
-        return 0.0
-    num = -(2 * F * M - E * N - G * L)
-    return num / (2 * det_I1)
+def print_summary(name, K, H):
+    print(f"\n=== {name} ===")
+    print(f"  K - min: {K.min():.4f}  max: {K.max():.4f}  mean: {K.mean():.4f}")
+    print(f"  H - min: {H.min():.4f}  max: {H.max():.4f}  mean: {H.mean():.4f}")
 
-# Parámetros de la grilla
-u_vals = np.linspace(0.01, math.pi - 0.01, 60)
-v_vals = np.linspace(0, 2 * math.pi, 120)
-U, V = np.meshgrid(u_vals, v_vals, indexing='ij')
 
-X = np.zeros_like(U)
-Y = np.zeros_like(U)
-Z = np.zeros_like(U)
-K = np.zeros_like(U)
-H = np.zeros_like(U)
+def surface_panel(fig, position, X, Y, Z, values, cmap, title, label):
+    ax = fig.add_subplot(2, 3, position, projection="3d")
+    vmin = float(values.min())
+    vmax = float(values.max())
+    if abs(vmax - vmin) < 1e-12:
+        norm_values = np.full_like(values, 0.5)
+    else:
+        norm_values = (values - vmin) / (vmax - vmin)
 
-for i in range(U.shape[0]):
-    for j in range(U.shape[1]):
-        u = U[i, j]
-        v = V[i, j]
-        X[i, j] = math.sin(u) * math.cos(v)
-        Y[i, j] = math.sin(u) * math.sin(v)
-        Z[i, j] = math.cos(u)
-        K[i, j] = K_gauss(u, v)
-        H[i, j] = H_mean(u, v)
+    ax.plot_surface(
+        X,
+        Y,
+        Z,
+        facecolors=cmap(norm_values),
+        alpha=0.9,
+        linewidth=0,
+        antialiased=True,
+        shade=False,
+    )
 
-# Resumen numérico
-print("=== Curvatura Gaussiana K ===")
-print(f"  min : {K.min():.6f}")
-print(f"  max : {K.max():.6f}")
-print(f"  mean: {K.mean():.6f}")
-print("  (Esfera unitaria esperado: K = 1.0 en todos los puntos)")
-print()
-print("=== Curvatura Media H ===")
-print(f"  min : {H.min():.6f}")
-print(f"  max : {H.max():.6f}")
-print(f"  mean: {H.mean():.6f}")
-print("  (Esfera unitaria esperado: H = 1.0 en todos los puntos)")
+    mappable = plt.cm.ScalarMappable(cmap=cmap)
+    mappable.set_clim(vmin=vmin, vmax=vmax if vmax > vmin else vmin + 1e-12)
+    mappable.set_array(values)
+    cbar = fig.colorbar(mappable, ax=ax, shrink=0.65, pad=0.06)
+    cbar.set_label(label)
 
-# Visualización
-fig = plt.figure(figsize=(14, 6))
+    ax.set_title(title)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_box_aspect([1, 1, 1])
 
-# Subplot K
-ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-k_plot = ax1.plot_surface(X, Y, Z, facecolors=plt.cm.coolwarm((K - K.min()) / (K.max() - K.min())), rstride=1, cstride=1, linewidth=0, antialiased=False, shade=False)
-ax1.set_title("Curvatura Gaussiana K")
-ax1.set_xlabel('X')
-ax1.set_ylabel('Y')
-ax1.set_zlabel('Z')
-ax1.set_box_aspect([1, 1, 1])
-m1 = plt.cm.ScalarMappable(cmap='coolwarm')
-m1.set_array(K)
-cbar1 = fig.colorbar(m1, ax=ax1, shrink=0.6, pad=0.1)
-cbar1.set_label("K")
 
-# Subplot H
-ax2 = fig.add_subplot(1, 2, 2, projection='3d')
-h_plot = ax2.plot_surface(X, Y, Z, facecolors=plt.cm.RdYlGn((H - H.min()) / (H.max() - H.min())), rstride=1, cstride=1, linewidth=0, antialiased=False, shade=False)
-ax2.set_title("Curvatura Media H")
-ax2.set_xlabel('X')
-ax2.set_ylabel('Y')
-ax2.set_zlabel('Z')
-ax2.set_box_aspect([1, 1, 1])
-m2 = plt.cm.ScalarMappable(cmap='RdYlGn')
-m2.set_array(H)
-cbar2 = fig.colorbar(m2, ax=ax2, shrink=0.6, pad=0.1)
-cbar2.set_label("H")
+# Grillas de evaluacion
+u60 = np.linspace(0.05, np.pi - 0.05, 60)
+v120 = np.linspace(0.0, 2 * np.pi, 120)
+u_torus = np.linspace(0.0, 2 * np.pi, 80)
+v_torus = np.linspace(0.0, 2 * np.pi, 80)
+t_circle = np.linspace(0.0, 2 * np.pi, 200)
+
+# Superficies
+sphere = Sphere(R=1.0)
+ellipsoid = Ellipsoid(a=2.0, b=1.0, c=0.5)
+torus = Torus(R=2.0, r=0.8)
+circle = PlanarCircle(R=1.0)
+
+# Evaluacion en grillas
+X_s, Y_s, Z_s, K_s, H_s = sphere.compute_grid(u60, v120)
+X_e, Y_e, Z_e, K_e, H_e = ellipsoid.compute_grid(u60, v120)
+X_t, Y_t, Z_t, K_t, H_t = torus.compute_grid(u_torus, v_torus)
+x_c, y_c, kappa_c = circle.compute_grid(t_circle)
+
+# Resumen por consola
+print_summary("Esfera (R=1)", K_s, H_s)
+print_summary("Elipsoide (a=2, b=1, c=0.5)", K_e, H_e)
+print_summary("Toro (R=2, r=0.8)", K_t, H_t)
+print("\n=== Circulo (R=1) ===")
+print(
+    f"  kappa - min: {kappa_c.min():.4f}  max: {kappa_c.max():.4f}  mean: {kappa_c.mean():.4f}"
+)
+
+# Figura 3D: 2 filas x 3 columnas
+fig = plt.figure(figsize=(18, 10))
+
+surface_panel(fig, 1, X_s, Y_s, Z_s, K_s, plt.cm.coolwarm, "Esfera K", "K")
+surface_panel(fig, 2, X_e, Y_e, Z_e, K_e, plt.cm.coolwarm, "Elipsoide K", "K")
+surface_panel(fig, 3, X_t, Y_t, Z_t, K_t, plt.cm.coolwarm, "Toro K", "K")
+
+surface_panel(fig, 4, X_s, Y_s, Z_s, H_s, plt.cm.RdYlGn, "Esfera H", "H")
+surface_panel(fig, 5, X_e, Y_e, Z_e, H_e, plt.cm.RdYlGn, "Elipsoide H", "H")
+surface_panel(fig, 6, X_t, Y_t, Z_t, H_t, plt.cm.RdYlGn, "Toro H", "H")
 
 plt.tight_layout()
-plt.savefig("output_curvatures.png", dpi=150)
-plt.close()
+plt.savefig("output_3d.png", dpi=150)
+plt.close(fig)
+
+# Figura separada: circulo coloreado por curvatura
+fig2 = plt.figure(figsize=(6, 6))
+ax2 = fig2.add_subplot(1, 1, 1)
+scatter = ax2.scatter(x_c, y_c, c=kappa_c, cmap="coolwarm", s=18)
+ax2.plot(x_c, y_c, color="black", linewidth=0.8, alpha=0.6)
+ax2.set_title("Circulo 2D con curvatura kappa")
+ax2.set_xlabel("x")
+ax2.set_ylabel("y")
+ax2.set_aspect("equal", adjustable="box")
+plt.colorbar(scatter, ax=ax2, label="kappa")
+plt.tight_layout()
+plt.savefig("output_circle.png", dpi=150)
+plt.close(fig2)

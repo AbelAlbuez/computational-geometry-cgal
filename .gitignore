@@ -77,3 +77,9 @@ src/final-project-interpolation/output/
 
 # macOS
 .DS_Store
+
+# curvatures
+src/curvatures/venv/
+
+# Taller 3 - Simplificación de Heightmap por Vecindad de Orden k/
+src/Taller 3 - Simplificación de Heightmap por Vecindad de Orden k/

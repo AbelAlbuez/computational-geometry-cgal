@@ -1,5 +1,12 @@
-nibabel>=5.0
-numpy>=1.24
-matplotlib>=3.7
-scikit-image>=0.21
-tqdm>=4.65
+# --- Procesamiento Médico y Geometría ---
+nibabel>=5.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+scikit-image>=0.22.0
+tqdm>=4.65.0
+
+# --- Inferencia IA y Visión por Computadora ---
+# torch>=2.3.0 asegura compatibilidad absoluta con numpy reciente
+torch>=2.3.0
+opencv-python>=4.8.0
+imageio>=2.31.0

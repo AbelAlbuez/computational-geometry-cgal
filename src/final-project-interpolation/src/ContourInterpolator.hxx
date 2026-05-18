@@ -4,6 +4,9 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+#include <cmath>
+#include <vector>
 
 // -------------------------------------------------------------------------
 inline pujCGAL::Final::ContourInterpolator::TContour
@@ -56,16 +59,76 @@ write_obj( const std::string& fname, const TContour& contour )
 }
 
 // -------------------------------------------------------------------------
+// Funciones auxiliares para la correspondencia de vértices por ángulo polar
+// -------------------------------------------------------------------------
+inline pujCGAL::Final::ContourInterpolator::TPoint
+calcular_centroide( const pujCGAL::Final::ContourInterpolator::TContour& contorno )
+{
+  double cx = 0.0, cy = 0.0;
+  for( const auto& p : contorno )
+  {
+    cx += p.x( );
+    cy += p.y( );
+  }
+  const double n = static_cast< double >( contorno.size( ) );
+  return pujCGAL::Final::ContourInterpolator::TPoint( cx / n, cy / n );
+}
+
+inline pujCGAL::Final::ContourInterpolator::TContour
+ordenar_por_angulo( const pujCGAL::Final::ContourInterpolator::TContour& contorno )
+{
+  if( contorno.empty( ) ) return contorno;
+
+  auto centroide = calcular_centroide( contorno );
+  pujCGAL::Final::ContourInterpolator::TContour ordenado = contorno;
+
+  std::sort( ordenado.begin( ), ordenado.end( ),
+             [ &centroide ]( const pujCGAL::Final::ContourInterpolator::TPoint& p1,
+                             const pujCGAL::Final::ContourInterpolator::TPoint& p2 )
+             {
+               double ang1 = std::atan2( p1.y( ) - centroide.y( ), p1.x( ) - centroide.x( ) );
+               double ang2 = std::atan2( p2.y( ) - centroide.y( ), p2.x( ) - centroide.x( ) );
+               return ang1 < ang2;
+             } );
+
+  return ordenado;
+}
+
+// -------------------------------------------------------------------------
 inline pujCGAL::Final::ContourInterpolator::TContour
 pujCGAL::Final::ContourInterpolator::
-interpolate( const TContour& A, const TContour& B, double /*t*/ )
+interpolate( const TContour& A, const TContour& B, double t )
 {
-  // TODO: implementación geométrica (correspondencia + interpolación).
-  // Por ahora regresa A para no romper el flujo.
-  ( void ) B;
-  return A;
+  if( A.empty( ) || B.empty( ) ) return A;
+
+  // Paso 1: Ordenar ambos contornos por ángulo polar respecto a sus centroides
+  TContour ordenadoA = ordenar_por_angulo( A );
+  TContour ordenadoB = ordenar_por_angulo( B );
+
+  TContour resultado;
+  resultado.reserve( ordenadoA.size( ) );
+
+  const std::size_t nA = ordenadoA.size( );
+  const std::size_t nB = ordenadoB.size( );
+
+  // Paso 2: Generar la correspondencia e interpolación lineal entre pares
+  for( std::size_t i = 0; i < nA; ++i )
+  {
+    // Mapeo indexado proporcional por si los contornos poseen diferente número de vértices
+    std::size_t idxB = ( i * nB ) / nA;
+    if( idxB >= nB ) idxB = nB - 1;
+
+    const auto& pA = ordenadoA[ i ];
+    const auto& pB = ordenadoB[ idxB ];
+
+    // Interpolación lineal paramétrica
+    double x = pA.x( ) + t * ( pB.x( ) - pA.x( ) );
+    double y = pA.y( ) + t * ( pB.y( ) - pA.y( ) );
+
+    resultado.emplace_back( x, y );
+  }
+
+  return resultado;
 }
 
 #endif // __ContourInterpolator__hxx__
-
-// eof - ContourInterpolator.hxx

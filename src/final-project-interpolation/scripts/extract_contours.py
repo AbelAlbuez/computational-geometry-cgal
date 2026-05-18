@@ -41,7 +41,7 @@ CONTOURS_DIR      = PROJECT_ROOT / "data" / "contours"
 INDEX_CSV         = CONTOURS_DIR / "index.csv"
 
 DATASET_DIR       = Path(
-    "/Users/abelalbuez/Documents/Maestria/Tercer Semestre/Tesis datasets"
+    "/home/jesus/Descargas"
 )
 DATASET_ZIP       = DATASET_DIR / "BraTS2024-BraTS-GLI-TrainingData.zip"
 

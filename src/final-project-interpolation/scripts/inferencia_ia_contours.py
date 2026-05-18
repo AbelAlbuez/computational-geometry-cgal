@@ -5,12 +5,11 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import imageio.v3 as iio
-import cv2
 from pathlib import Path
 from skimage.draw import polygon
 
 # ============================================================
-# 1. WARP Y ARQUITECTURAS (Tomadas de experimento_mitad_resolucion.py)
+# 1. WARP Y ARQUITECTURAS
 # ============================================================
 def warp_backward_diferenciable(img, flow):
     img, flow = img.float(), flow.float()
@@ -73,13 +72,16 @@ class BaselineIFNet(nn.Module):
 # 2. FUNCIONES DE APOYO PARA CONTORNOS Y PADDING
 # ============================================================
 def obj_to_mask(obj_path: Path, shape=(240, 240)):
-    """Convierte un contorno .obj en una máscara de 3 canales (RGB-like) para la red."""
     coords = []
     with open(obj_path, 'r') as f:
         for line in f:
             if line.startswith('v '):
-                _, x, y = line.split()
-                coords.append([float(y), float(x)]) # skimage usa (row, col)
+                # Dividimos la línea en partes
+                parts = line.split()
+                # Tomamos solo X (índice 1) e Y (índice 2), ignorando la Z y el prefijo 'v'
+                x = parts[1]
+                y = parts[2]
+                coords.append([float(y), float(x)]) 
     
     coords = np.array(coords)
     mask = np.zeros(shape, dtype=np.uint8)
@@ -88,7 +90,6 @@ def obj_to_mask(obj_path: Path, shape=(240, 240)):
         rr, cc = polygon(coords[:, 0], coords[:, 1], shape)
         mask[rr, cc] = 255
         
-    # Convertir a 3 canales para que sea compatible con BaselineIFNet (espera 6 canales concat)
     mask_3c = np.stack([mask]*3, axis=-1)
     return mask_3c
 
@@ -100,14 +101,12 @@ def pad_image(img_tensor, multiplier=32):
     return F.pad(img_tensor, padding), (h, w)
 
 # ============================================================
-# 3. MOTOR DE INFERENCIA PARA PARES DE SLICES (.OBJ)
+# 3. MOTOR DE INFERENCIA
 # ============================================================
 def generar_interpolacion_ia(ruta_obj_a, ruta_obj_b, ruta_png_salida, ruta_modelo):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\n[*] INICIANDO INFERENCIA IA (ESCALA 1.0)")
-    print(f"[*] Dispositivo: {device}")
+    print(f"[*] Dispositivo de inferencia: {device}")
     
-    # Cargar el modelo Baseline
     model = BaselineIFNet().to(device)
     try:
         model.load_state_dict(torch.load(ruta_modelo, map_location=device))
@@ -117,56 +116,91 @@ def generar_interpolacion_ia(ruta_obj_a, ruta_obj_b, ruta_png_salida, ruta_model
         
     model.eval()
 
-    # 1. Convertir geometría a píxeles
     mask_a = obj_to_mask(Path(ruta_obj_a))
     mask_b = obj_to_mask(Path(ruta_obj_b))
     
-    # 2. Preparar tensores (B, C, H, W) normalizados a [0, 1]
     t0_orig = torch.from_numpy(mask_a).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
     t1_orig = torch.from_numpy(mask_b).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
     
-    # Aplicar padding para que las dimensiones sean divisibles por 32
     t0_pad, (h_orig, w_orig) = pad_image(t0_orig)
     t1_pad, _ = pad_image(t1_orig)
 
-    print(f"[*] Procesando máscaras de tamaño: {w_orig}x{h_orig}")
+    print(f"[*] Procesando mascaras de tamaño: {w_orig}x{h_orig}")
     tiempo_inicio = time.time()
 
     with torch.no_grad():
         with torch.autocast(device_type="cuda" if "cuda" in str(device) else "cpu", dtype=torch.float16):
-            # 3. Inferencia de la Red
             pred_pad, flow_pad = model(t0_pad, t1_pad)
-            
-            # Quitar el padding
             pred = pred_pad[:, :, :h_orig, :w_orig]
 
-        # 4. Formatear la salida para guardar
         pred_np = pred.squeeze(0).permute(1, 2, 0).cpu().numpy()
         pred_np = (np.clip(pred_np, 0, 1) * 255.0).astype(np.uint8)
-        
-        # Como es una máscara, podemos tomar solo el primer canal para guardarlo en escala de grises
         pred_gray = pred_np[:, :, 0]
         
-        # Guardar resultado
         iio.imwrite(ruta_png_salida, pred_gray)
-    
+        # -------------------------------------------------------------
+        # NUEVO: Generar versión con Zoom (Bounding Box) para visualizar
+        # -------------------------------------------------------------
+        y_indices, x_indices = np.where(pred_gray > 0)
+        if len(y_indices) > 0 and len(x_indices) > 0:
+            import cv2
+            
+            # 1. Encontrar los límites de la figura
+            y_min, y_max = y_indices.min(), y_indices.max()
+            x_min, x_max = x_indices.min(), x_indices.max()
+
+            # 2. Darle un margen de 15 píxeles alrededor para contexto
+            margen = 15
+            y_min = max(0, y_min - margen)
+            y_max = min(pred_gray.shape[0], y_max + margen)
+            x_min = max(0, x_min - margen)
+            x_max = min(pred_gray.shape[1], x_max + margen)
+
+            recorte = pred_gray[y_min:y_max, x_min:x_max]
+            
+            # 3. Escalar el recorte (ej. 8x más grande) sin perder los bordes duros
+            if recorte.size > 0:
+                recorte_zoom = cv2.resize(
+                    recorte, 
+                    (recorte.shape[1] * 8, recorte.shape[0] * 8), 
+                    interpolation=cv2.INTER_NEAREST
+                )
+                ruta_zoom = str(ruta_png_salida).replace(".png", "_zoomed.png")
+                iio.imwrite(ruta_zoom, recorte_zoom)
+                print(f"[*] Vista ampliada (Zoom) guardada en: {ruta_zoom}")
+                
     tiempo_total = time.time() - tiempo_inicio
-    print(f"[*] ¡CONVERSIÓN FINALIZADA en {tiempo_total:.3f} segundos!")
-    print(f"[*] Imagen generada en: {ruta_png_salida}\n")
+    print(f"[*] CONVERSION FINALIZADA en {tiempo_total:.3f} segundos")
+    print(f"[*] Imagen generada en: {ruta_png_salida}")
 
 if __name__ == "__main__":
-    # Ajusta estas rutas a tu estructura del proyecto
+    import argparse
+    import sys
+    
     ROOT_DIR = Path(__file__).resolve().parents[1]
-    CONTOURS_DIR = ROOT_DIR / "data" / "contours" / "BraTS-GLI-00000-000"
+    DEFAULT_MODEL_PATH = ROOT_DIR / "modelos" / "modelo_baseline_100_definitivo.pth"
     
-    OBJ_A = CONTOURS_DIR / "slice_0070.obj"
-    OBJ_B = CONTOURS_DIR / "slice_0071.obj"
-    PNG_OUT = CONTOURS_DIR / "baseline_mid_0070_0071.png"
+    parser = argparse.ArgumentParser(description="Generar interpolacion IA.")
+    parser.add_argument("slice_a", help="Ruta al contorno .obj del slice A")
+    parser.add_argument("slice_b", help="Ruta al contorno .obj del slice B")
+    parser.add_argument("--modelo", default=str(DEFAULT_MODEL_PATH), help="Ruta al archivo .pth del modelo")
     
-    # Asegúrate de colocar la ruta correcta a tu .pth
-    MODELO_PATH = ROOT_DIR / "modelos" / "modelo_baseline_100_definitivo.pth" 
+    args = parser.parse_args()
     
-    if OBJ_A.exists() and OBJ_B.exists():
-        generar_interpolacion_ia(str(OBJ_A), str(OBJ_B), str(PNG_OUT), str(MODELO_PATH))
-    else:
-        print(f"[!] No se encontraron los archivos .obj en: {CONTOURS_DIR}")
+    path_a = Path(args.slice_a)
+    path_b = Path(args.slice_b)
+    path_modelo = Path(args.modelo)
+    
+    if not path_a.exists() or not path_b.exists():
+        print(f"[!] Error: No se encuentran los archivos .obj de entrada.")
+        sys.exit(1)
+        
+    if not path_modelo.exists():
+        print(f"[!] ADVERTENCIA: No se encontro el modelo en {path_modelo}")
+        print(f"[!] Asegurate de colocar tu archivo .pth en la carpeta 'modelos'")
+        sys.exit(1)
+        
+    nombre_salida = f"baseline_mid_{path_a.stem}_{path_b.stem}.png"
+    out_png = path_a.parent / nombre_salida
+        
+    generar_interpolacion_ia(str(path_a), str(path_b), str(out_png), str(path_modelo))

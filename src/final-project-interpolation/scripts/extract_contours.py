@@ -154,7 +154,7 @@ def write_contour_obj(path: Path, contour_xy: np.ndarray, case_id: str,
         f.write(f"# Contorno tumor ET - caso {case_id} - slice axial {slice_z}\n")
         f.write(f"# {n} vertices\n")
         for x, y in contour_xy:
-            f.write(f"v {x:.6f} {y:.6f}\n")
+            f.write(f"v {x:.6f} {y:.6f} {float(slice_z):.6f}\n")
         for i in range(1, n):
             f.write(f"l {i} {i + 1}\n")
         f.write(f"l {n} 1\n")

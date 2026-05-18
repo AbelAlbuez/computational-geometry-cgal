@@ -49,7 +49,7 @@ write_obj( const std::string& fname, const TContour& contour )
 
   ofs << "# Contorno interpolado - " << contour.size( ) << " vertices\n";
   for( const auto& p : contour )
-    ofs << "v " << p.x( ) << " " << p.y( ) << "\n";
+    ofs << "v " << p.x( ) << " " << p.y( ) << " 0.000000\n";
 
   const std::size_t n = contour.size( );
   for( std::size_t i = 1; i < n; ++i )

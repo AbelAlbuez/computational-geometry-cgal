@@ -3,27 +3,44 @@
 // Author: Abel Albuez Sanchez
 //
 // CLI entry point. Modes:
-//   linear A.obj B.obj t out.obj [--adaptive [lambda]]
-//   sdf    A.obj B.obj t out.obj [--no-align] [--spacing s]
-//   series --kind {spline|poly|linear} --window dir --upsample K out_dir
+//   linear      A.obj B.obj t out.obj            (M1: align+resample+LERP, then
+//                                                 Bentley-Ottmann self-intersection
+//                                                 resolution)
+//   sdf         A.obj B.obj t out.obj [--no-align] [--spacing s]   (M3)
+//   series      --kind {spline|poly|linear} --window dir --upsample K out_dir (M2)
+//   reconstruct --contours dir --method {linear|spline|sdf} --out mesh.off
+//               [--dz mm] [--upsample K] [--boissonnat band.off]
+//   metrics     --mesh mesh.off [--contours dir --dz mm] [--grid N]
 // =============================================================================
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
+#include <CGAL/squared_distance_2.h>
+
 #include "ContourInterpolator.h"
+#include "ContourResampler.h"
+#include "LinearInterpolator.h"
+#include "SelfIntersectionResolver.h"
 #include "Reconstructor.h"
 #include "Metrics.h"
 
-using TInterp   = pujCGAL::Final::ContourInterpolator;
-using TRecon    = pujCGAL::Final::Reconstructor;
-using TMetrics  = pujCGAL::Final::Metrics;
+using TInterp    = pujCGAL::Final::ContourInterpolator;
+using TResampler = pujCGAL::Final::ContourResampler;
+using TLinear    = pujCGAL::Final::LinearInterpolator;
+using TResolver  = pujCGAL::Final::SelfIntersectionResolver;
+using TRecon     = pujCGAL::Final::Reconstructor;
+using TMetrics   = pujCGAL::Final::Metrics;
 using InterpKind = TInterp::InterpKind;
+using TContour   = TInterp::TContour;
+using TPoint     = TInterp::TPoint;
 namespace fs = std::filesystem;
 
 namespace
@@ -32,7 +49,7 @@ namespace
   {
     std::cerr
       << "Usage:\n"
-      << "  " << prog << " linear A.obj B.obj t out.obj [--adaptive [lambda]]\n"
+      << "  " << prog << " linear A.obj B.obj t out.obj\n"
       << "  " << prog << " sdf    A.obj B.obj t out.obj [--no-align] [--spacing s]\n"
       << "  " << prog << " series --kind {spline|poly|linear} --window dir "
          "--upsample K out_dir\n"
@@ -59,41 +76,80 @@ namespace
     return p.substr( 0, dot );
   }
 
-  // ----- linear (M1) -----------------------------------------------------
+  // -- small geometry helpers for the (shared) linear pipeline --------------
+  TContour translate( const TContour& c, double dx, double dy )
+  {
+    TContour out; out.reserve( c.size( ) );
+    for( const auto& p : c ) out.emplace_back( p.x( ) + dx, p.y( ) + dy );
+    return out;
+  }
+
+  // Cyclic rotation k of B minimising sum_i |A[i] - B[(i+k)%n]|^2.
+  int best_rotation( const TContour& A, const TContour& B )
+  {
+    const int n = static_cast< int >( A.size( ) );
+    int best_k = 0;
+    double best = std::numeric_limits< double >::max( );
+    for( int k = 0; k < n; ++k )
+    {
+      double d = 0.0;
+      for( int i = 0; i < n; ++i )
+        d += CGAL::to_double( CGAL::squared_distance( A[ i ], B[ ( i + k ) % n ] ) );
+      if( d < best ) { best = d; best_k = k; }
+    }
+    return best_k;
+  }
+
+  TContour rotate( const TContour& B, int k )
+  {
+    const int n = static_cast< int >( B.size( ) );
+    TContour out; out.reserve( n );
+    for( int i = 0; i < n; ++i ) out.push_back( B[ ( i + k ) % n ] );
+    return out;
+  }
+
+  // ----- linear (M1): shared LinearInterpolator + self-intersection resolver
   int run_linear( int argc, char** argv )
   {
     if( argc < 6 ) { usage( argv[ 0 ] ); return 1; }
     const std::string fa = argv[ 2 ], fb = argv[ 3 ], out = argv[ 5 ];
     const double t = std::atof( argv[ 4 ] );
 
-    bool adaptive = false; double lambda = 2.0;
-    for( int i = 6; i < argc; ++i )
-    {
-      const std::string a = argv[ i ];
-      if( a == "--adaptive" )
-      {
-        adaptive = true;
-        if( i + 1 < argc )
-        {
-          char* end = nullptr;
-          const double v = std::strtod( argv[ i + 1 ], &end );
-          if( end != argv[ i + 1 ] ) { lambda = v; ++i; }
-        }
-      }
-      else { std::cerr << "Unknown argument: " << a << "\n"; usage( argv[ 0 ] ); return 1; }
-    }
-
     auto A = TInterp::read_obj( fa );
     auto B = TInterp::read_obj( fb );
     if( A.size( ) < 3 || B.size( ) < 3 )
     { std::cerr << "Error: a contour has < 3 vertices.\n"; return 2; }
 
-    const auto C = TInterp::interpolate( A, B, t, adaptive, lambda );
+    // CCW -> centroid-centre -> arc-length resample -> optimal cyclic rotation
+    // -> vertex-wise LERP -> translate to the interpolated centroid -> resolve
+    // self-intersections (Bentley-Ottmann).
+    TInterp::ensure_ccw( A );
+    TInterp::ensure_ccw( B );
+    const TPoint cA = TInterp::centroid( A );
+    const TPoint cB = TInterp::centroid( B );
+    auto A0 = translate( A, -cA.x( ), -cA.y( ) );
+    auto B0 = translate( B, -cB.x( ), -cB.y( ) );
+
+    int n = static_cast< int >( std::max( A0.size( ), B0.size( ) ) );
+    if( n > 400 ) n = 400;
+    auto Ar = TResampler::resample( A0, n );
+    auto Br = TResampler::resample( B0, n );
+    const int k = best_rotation( Ar, Br );
+    if( k != 0 ) Br = rotate( Br, k );
+
+    auto C0 = TLinear::interpolate( Ar, Br, t );
+    const double mx = ( 1.0 - t ) * cA.x( ) + t * cB.x( );
+    const double my = ( 1.0 - t ) * cA.y( ) + t * cB.y( );
+    auto C = translate( C0, mx, my );
+
+    const bool had = TResolver::has_self_intersections( C );
+    if( had ) C = TResolver::resolve( C );
+
     TInterp::write_obj( out, C );
     const auto cc = TInterp::centroid( C );
-    std::cout << "linear t=" << t;
-    if( adaptive ) std::cout << "  [curvature-adaptive lambda=" << lambda << "]";
-    std::cout << "\n  A: " << A.size( ) << " v  area=" << TInterp::signed_area( A )
+    std::cout << "linear t=" << t << "  rotation=" << k
+              << "  self-intersections=" << ( had ? "resolved" : "none" )
+              << "\n  A: " << A.size( ) << " v  area=" << TInterp::signed_area( A )
               << "\n  B: " << B.size( ) << " v  area=" << TInterp::signed_area( B )
               << "\n  C: " << C.size( ) << " v  area=" << TInterp::signed_area( C )
               << "  centroid=(" << cc.x( ) << ", " << cc.y( ) << ")\n"
@@ -214,6 +270,7 @@ namespace
               << "  -> " << result.size( ) << " contours in " << out_dir << "\n";
     return 0;
   }
+
   // ----- reconstruct (Stage 3-4: Poisson) --------------------------------
   int run_reconstruct( int argc, char** argv )
   {
@@ -286,6 +343,7 @@ namespace
     }
     return ( closed && bounds ) ? 0 : 4;
   }
+
   // ----- metrics (Stage 5) -----------------------------------------------
   int run_metrics( int argc, char** argv )
   {

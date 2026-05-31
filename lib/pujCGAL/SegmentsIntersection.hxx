@@ -5,6 +5,17 @@
 #include <iterator>
 
 #include <CGAL/intersections.h>
+#include <CGAL/version.h>
+
+// CGAL's intersection() returns std::variant in CGAL >= 6.0 but boost::variant
+// in CGAL 5.x. Select the matching accessor so this compiles on both.
+#if CGAL_VERSION_NR >= 1060000000
+#  include <variant>
+#  define PUJ_GET_IF( T, V ) std::get_if< T >( V )
+#else
+#  include <boost/variant.hpp>
+#  define PUJ_GET_IF( T, V ) boost::get< T >( V )
+#endif
 
 // -------------------------------------------------------------------------
 template< class TSegmentsIt, class TPointsIt >
@@ -16,7 +27,7 @@ BruteForce( TSegmentsIt sB, TSegmentsIt sE, TPointsIt pIt )
   for( auto i = sB; i != sE; ++i )
     for( auto j = i; j != sE; ++j )
       if( auto r = CGAL::intersection( *i, *j ) )
-        if( const TPoint* p = std::get_if< TPoint >( &*r ) )
+        if( const TPoint* p = PUJ_GET_IF( TPoint, &*r ) )
           *pIt = *p;
 }
 
@@ -157,7 +168,7 @@ y( const TSegment& s )
   typename TKernel::Line_2 l( TPoint( Self::SweepX, TReal( 0 ) ), d );
 
   if( auto r = CGAL::intersection( s.supporting_line( ), l ) )
-    if( const TPoint* p = std::get_if< TPoint >( &*r ) )
+    if( const TPoint* p = PUJ_GET_IF( TPoint, &*r ) )
       return( p->y( ) );
 
   return( s.source( ).y( ) );
@@ -257,7 +268,7 @@ schedule( TSegmentsIt i, TSegmentsIt j, TQueue& Q )
 
   if( auto r = CGAL::intersection( Self::normal( i ), Self::normal( j ) ) )
   {
-    if( const TPoint* p = std::get_if< TPoint >( &*r ) )
+    if( const TPoint* p = PUJ_GET_IF( TPoint, &*r ) )
     {
       if(
         CGAL::compare_x( *p, TPoint( Self::SweepX, TReal( 0 ) ) )

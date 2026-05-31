@@ -62,4 +62,22 @@ add_executable(test_metrics src/test_metrics.cxx)
 target_link_libraries(test_metrics CGAL::CGAL CGAL::Eigen3_support)
 add_test(NAME metrics_ellipsoid COMMAND test_metrics)
 
+# -- pujCGAL header library (Bentley-Ottmann SegmentsIntersection), used by the
+#    `linear` command for self-intersection resolution.
+include_directories(${CMAKE_SOURCE_DIR}/../../lib)
+
+# pujCGAL/SegmentsIntersection.hxx uses std::iter_value_t (C++20); the main
+# executable therefore compiles as C++20 (the tests stay on C++17).
+target_compile_features(contour_interpolator PRIVATE cxx_std_20)
+
+# Register the shared header-only modules with the main target.
+target_sources(contour_interpolator PRIVATE
+  src/ContourResampler.h
+  src/ContourResampler.hxx
+  src/LinearInterpolator.h
+  src/LinearInterpolator.hxx
+  src/SelfIntersectionResolver.h
+  src/SelfIntersectionResolver.hxx
+)
+
 ## eof - CMakeLists.txt

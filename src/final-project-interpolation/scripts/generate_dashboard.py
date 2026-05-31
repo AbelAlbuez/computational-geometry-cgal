@@ -273,6 +273,8 @@ HTML_TEMPLATE = r"""<!doctype html>
   .summary { background: #fff; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; max-width: 980px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 
@@ -316,7 +318,17 @@ HTML_TEMPLATE = r"""<!doctype html>
 <h2>3. Visualizador interactivo — slider de <em>t</em></h2>
 <div id="viz-grid" class="grid"></div>
 
-<h2>4. Resumen</h2>
+<h2>4. Visualización 3D — contornos apilados</h2>
+<p class="note">
+  Escena Three.js con los 11 contornos interpolados (<em>t</em>=0.0 a 1.0)
+  apilados en el eje Z (Z = t × 10). Color azul → rojo según <em>t</em>;
+  contorno A en Z=0 (azul sólido), B en Z=10 (rojo sólido), GT en Z=5
+  (naranja discontinuo). Rotar: clic izquierdo · zoom: scroll ·
+  pan: clic derecho.
+</p>
+<div id="viz3d-grid" class="grid"></div>
+
+<h2>5. Resumen</h2>
 <div class="summary" id="summary"></div>
 
 <script>
@@ -456,7 +468,146 @@ for (const p of PAIRS) {
 }
 
 // -----------------------------------------------------------------------------
-// Section 4: summary.
+// Section 4: 3D stacked contour viewer (Three.js).
+// -----------------------------------------------------------------------------
+function centroidOf(contour) {
+  let sx = 0, sy = 0;
+  for (const [x, y] of contour) { sx += x; sy += y; }
+  const n = contour.length || 1;
+  return [sx / n, sy / n];
+}
+
+function contourToLine(contour, cx, cy, z, color, dashed, linewidth) {
+  const pts = [];
+  for (const [x, y] of contour) pts.push(new THREE.Vector3(x - cx, y - cy, z));
+  if (contour.length) pts.push(new THREE.Vector3(contour[0][0] - cx, contour[0][1] - cy, z));
+  const geom = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = dashed
+    ? new THREE.LineDashedMaterial({ color, linewidth, dashSize: 1.0, gapSize: 0.6 })
+    : new THREE.LineBasicMaterial({ color, linewidth });
+  const line = new THREE.Line(geom, mat);
+  if (dashed) line.computeLineDistances();
+  return line;
+}
+
+function hslGradient(t) {
+  // hue 240 (blue) -> 0 (red)
+  const hue = (240 * (1 - t)) / 360;
+  const col = new THREE.Color();
+  col.setHSL(hue, 0.85, 0.55);
+  return col;
+}
+
+function build3DScene(panel, pair) {
+  const canvasWrap = panel.querySelector(".scene3d");
+  const W = canvasWrap.clientWidth || 600;
+  const H = 480;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a2e);
+
+  const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 500);
+  const initialPos = new THREE.Vector3(25, -25, 15);
+  camera.position.copy(initialPos);
+  camera.up.set(0, 0, 1);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  canvasWrap.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 5);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+
+  // Reference axes + ground grid (faint).
+  const grid = new THREE.GridHelper(40, 20, 0x444466, 0x2a2a44);
+  grid.rotation.x = Math.PI / 2;
+  scene.add(grid);
+
+  const [cx, cy] = centroidOf(pair.contour_a);
+
+  // 11 interpolated contours t=0..1 stacked at z = t*10.
+  const tKeys = Object.keys(pair.interpolated).sort();
+  for (const tStr of tKeys) {
+    const t = parseFloat(tStr);
+    const c = pair.interpolated[tStr];
+    if (!c || !c.length) continue;
+    const color = hslGradient(t);
+    scene.add(contourToLine(c, cx, cy, t * 10.0, color, false, 1));
+  }
+
+  // A at z=0 (solid blue), B at z=10 (solid red).
+  scene.add(contourToLine(pair.contour_a, cx, cy, 0.0,  0x1f77b4, false, 2));
+  scene.add(contourToLine(pair.contour_b, cx, cy, 10.0, 0xd62728, false, 2));
+
+  // GT at z=5 if present (dashed orange).
+  if (pair.contour_gt && pair.contour_gt.length) {
+    scene.add(contourToLine(pair.contour_gt, cx, cy, 5.0, 0xff7f0e, true, 1.5));
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Reset camera button.
+  panel.querySelector(".reset-cam").addEventListener("click", () => {
+    camera.position.copy(initialPos);
+    controls.target.set(0, 0, 5);
+    controls.update();
+  });
+
+  // Handle resize.
+  window.addEventListener("resize", () => {
+    const w = canvasWrap.clientWidth || W;
+    renderer.setSize(w, H);
+    camera.aspect = w / H;
+    camera.updateProjectionMatrix();
+  });
+}
+
+const viz3dGrid = document.getElementById("viz3d-grid");
+const pendingScenes = [];
+for (const p of PAIRS) {
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  panel.innerHTML = `
+    <h3>${p.label} — ${p.descripcion}</h3>
+    <div class="scene3d" style="width:100%;height:480px;position:relative;
+         background:#1a1a2e;border-radius:4px;overflow:hidden;"></div>
+    <div class="legend" style="margin-top:6px;">
+      <span><span class="swatch" style="background:#1f77b4"></span>A (Z=0)</span>
+      <span><span class="swatch" style="background:#d62728"></span>B (Z=10)</span>
+      <span><span class="swatch" style="background:#ff7f0e"></span>GT (Z=5, discontinuo)</span>
+      <span><span class="swatch" style="background:linear-gradient(90deg,#3b6cff,#ff3b3b)"></span>Interpolados (t=0→1)</span>
+      <button class="reset-cam" style="margin-left:12px;font-size:11px;
+              padding:3px 8px;cursor:pointer;">Reset cámara</button>
+    </div>
+  `;
+  viz3dGrid.appendChild(panel);
+  pendingScenes.push({ panel, pair: p, built: false });
+}
+
+// Lazy-build scenes when they enter the viewport.
+const io = new IntersectionObserver((entries, obs) => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    const item = pendingScenes.find(s => s.panel === e.target);
+    if (item && !item.built) {
+      item.built = true;
+      build3DScene(item.panel, item.pair);
+      obs.unobserve(e.target);
+    }
+  }
+}, { rootMargin: "100px" });
+for (const s of pendingScenes) io.observe(s.panel);
+
+// -----------------------------------------------------------------------------
+// Section 5: summary.
 // -----------------------------------------------------------------------------
 const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
 const summary = document.getElementById("summary");
@@ -518,7 +669,7 @@ def build_stress_section() -> str:
         for (r, c, s) in STRESS_ROWS
     )
 
-    return f"""<h2>5. Experimento de stress — Robustez del pipeline</h2>
+    return f"""<h2>6. Experimento de stress — Robustez del pipeline</h2>
 <p class="note">
   Los contornos ET reales de BraTS son empíricamente demasiado convexos
   para producir auto-intersecciones bajo interpolación lineal con

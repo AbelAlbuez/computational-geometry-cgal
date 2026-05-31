@@ -166,7 +166,7 @@ int main( int argc, char** argv )
   if( argc < 3 )
   {
     std::cerr << "Usage: " << argv[ 0 ]
-              << " slice_A.obj slice_B.obj [output.obj]" << std::endl;
+              << " slice_A.obj slice_B.obj [output.obj] [t=0.5]" << std::endl;
     return 1;
   }
 
@@ -175,6 +175,7 @@ int main( int argc, char** argv )
   const std::string output_path = ( argc >= 4 )
     ? std::string( argv[ 3 ] )
     : ( make_output_dir( ) + "/contour_interpolated.obj" );
+  const double t = ( argc >= 5 ) ? std::stod( argv[ 4 ] ) : 0.5;
 
   auto A = TInterp::read_obj( fa );
   auto B = TInterp::read_obj( fb );
@@ -220,12 +221,13 @@ int main( int argc, char** argv )
     std::cout << "Optimal rotation of B: 0\n";
   }
 
-  // -- (5) Linear interpolation at t = 0.5 in the centred frame.
-  auto C0 = TLinear::interpolate( Ar, Br, 0.5 );
+  // -- (5) Linear interpolation at parameter t in the centred frame.
+  auto C0 = TLinear::interpolate( Ar, Br, t );
 
-  // -- (6) Translate the result to the average centroid.
-  const double mx = 0.5 * ( cAx + cBx );
-  const double my = 0.5 * ( cAy + cBy );
+  // -- (6) Translate the result to the t-weighted average centroid:
+  //        (1 - t) * cA + t * cB.
+  const double mx = ( 1.0 - t ) * cAx + t * cBx;
+  const double my = ( 1.0 - t ) * cAy + t * cBy;
   auto C = translate( C0, mx, my );
   std::cout << "Interpolated contour: " << C.size( ) << " vertices\n";
 

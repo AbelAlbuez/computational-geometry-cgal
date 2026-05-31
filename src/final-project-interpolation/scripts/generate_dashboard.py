@@ -26,7 +26,7 @@ from scipy.spatial.distance import directed_hausdorff
 ROOT     = Path(__file__).resolve().parent.parent
 BINARY   = ROOT / "build" / "interpolation_lineal"
 CONTOURS = ROOT / "data" / "contours"
-OUT_HTML = ROOT / "dashboard_lineal.html"
+OUT_HTML = ROOT / "src" / "interpolation-lineal" / "dashboard_lineal.html"
 
 T_STEPS  = [round(i / 10.0, 1) for i in range(11)]      # 0.0 .. 1.0
 T_INDEX_HALF = 5                                         # t=0.5 → metrics

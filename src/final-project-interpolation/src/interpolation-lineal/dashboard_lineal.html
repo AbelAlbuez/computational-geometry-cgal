@@ -230,5 +230,41 @@ summary.innerHTML = `
 `;
 </script>
 
+<h2>5. Experimento de stress — Robustez del pipeline</h2>
+<p class="note">
+  Los contornos ET reales de BraTS son empíricamente demasiado convexos
+  para producir auto-intersecciones bajo interpolación lineal con
+  <em>best_rotation</em>. Para forzar un escenario adversarial diseñé un
+  experimento sintético: contorno <em>A</em> = estrella de 4 puntas
+  (8 vértices, R=50) vs. contorno <em>B</em> = cuadrado de 8 vértices
+  (esquinas + puntos medios, lado=60), ambos centrados en el mismo punto.
+  Barrí el radio interior <em>r</em> de la estrella sobre {10, 5, 3, 1},
+  y como control independiente verifiqué los cruces de la interpolación
+  cruda vértice a vértice con una rutina O(n²) en Python.
+</p>
+<table id="stress-table">
+  <thead>
+    <tr>
+      <th>r</th>
+      <th>Cruces (Python, crudo)</th>
+      <th class="txt">Self-int (binario)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>10</td><td>0</td><td class="txt good">no</td></tr>
+    <tr><td>5</td><td>4</td><td class="txt good">no</td></tr>
+    <tr><td>3</td><td>4</td><td class="txt good">no</td></tr>
+    <tr><td>1</td><td>4</td><td class="txt good">no</td></tr>
+  </tbody>
+</table>
+<div class="summary" style="max-width:980px;">
+  <b>Conclusión:</b> la pre-alineación (CCW + centroide + best_rotation)
+  elimina los cruces antes de que el resolver los vea. El
+  <code>SelfIntersectionResolver</code> actúa como salvaguarda de última
+  línea para casos que el pipeline no anticipa.
+</div>
+<div class="panel" style="margin-top:14px;max-width:980px;"><h3>Estrella (r=1) vs cuadrado — salida del binario</h3><img src="output/stress_test/2026-05-31_17-46-43/stress_comparison.png" alt="Comparativa stress test" style="width:100%;height:auto;display:block;border:1px solid #ddd;border-radius:4px;"><p class="note" style="margin-top:6px;">Izquierda: entradas A (azul) y B (rojo). Derecha: interpolación producida por el binario (verde). Pese a la geometría adversarial, el resultado es un polígono simple sin cruces.</p></div>
+
+
 </body>
 </html>

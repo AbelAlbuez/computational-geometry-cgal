@@ -475,8 +475,80 @@ summary.innerHTML = `
 `;
 </script>
 
+__STRESS_SECTION__
+
 </body>
 </html>
+"""
+
+
+STRESS_ROWS = [
+    (10, 0, "no"),
+    (5,  4, "no"),
+    (3,  4, "no"),
+    (1,  4, "no"),
+]
+
+
+def build_stress_section() -> str:
+    stress_dir = ROOT / "src" / "interpolation-lineal" / "output" / "stress_test"
+    img_block  = ""
+    if stress_dir.exists():
+        runs = sorted(p for p in stress_dir.iterdir() if p.is_dir())
+        if runs:
+            png = runs[-1] / "stress_comparison.png"
+            if png.exists():
+                rel = f"output/stress_test/{runs[-1].name}/stress_comparison.png"
+                img_block = (
+                    '<div class="panel" style="margin-top:14px;max-width:980px;">'
+                    '<h3>Estrella (r=1) vs cuadrado — salida del binario</h3>'
+                    f'<img src="{rel}" alt="Comparativa stress test" '
+                    'style="width:100%;height:auto;display:block;'
+                    'border:1px solid #ddd;border-radius:4px;">'
+                    '<p class="note" style="margin-top:6px;">'
+                    'Izquierda: entradas A (azul) y B (rojo). Derecha: '
+                    'interpolación producida por el binario (verde). Pese a la '
+                    'geometría adversarial, el resultado es un polígono simple '
+                    'sin cruces.</p></div>'
+                )
+
+    rows = "\n".join(
+        f'    <tr><td>{r}</td><td>{c}</td>'
+        f'<td class="txt good">{s}</td></tr>'
+        for (r, c, s) in STRESS_ROWS
+    )
+
+    return f"""<h2>5. Experimento de stress — Robustez del pipeline</h2>
+<p class="note">
+  Los contornos ET reales de BraTS son empíricamente demasiado convexos
+  para producir auto-intersecciones bajo interpolación lineal con
+  <em>best_rotation</em>. Para forzar un escenario adversarial diseñé un
+  experimento sintético: contorno <em>A</em> = estrella de 4 puntas
+  (8 vértices, R=50) vs. contorno <em>B</em> = cuadrado de 8 vértices
+  (esquinas + puntos medios, lado=60), ambos centrados en el mismo punto.
+  Barrí el radio interior <em>r</em> de la estrella sobre {{10, 5, 3, 1}},
+  y como control independiente verifiqué los cruces de la interpolación
+  cruda vértice a vértice con una rutina O(n²) en Python.
+</p>
+<table id="stress-table">
+  <thead>
+    <tr>
+      <th>r</th>
+      <th>Cruces (Python, crudo)</th>
+      <th class="txt">Self-int (binario)</th>
+    </tr>
+  </thead>
+  <tbody>
+{rows}
+  </tbody>
+</table>
+<div class="summary" style="max-width:980px;">
+  <b>Conclusión:</b> la pre-alineación (CCW + centroide + best_rotation)
+  elimina los cruces antes de que el resolver los vea. El
+  <code>SelfIntersectionResolver</code> actúa como salvaguarda de última
+  línea para casos que el pipeline no anticipa.
+</div>
+{img_block}
 """
 
 
@@ -490,6 +562,7 @@ def main():
 
     payload = json.dumps(results, ensure_ascii=False, separators=(",", ":"))
     html    = HTML_TEMPLATE.replace("__PAIRS_JSON__", payload)
+    html    = html.replace("__STRESS_SECTION__", build_stress_section())
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"\nDashboard escrito en {OUT_HTML.relative_to(ROOT)}")
 

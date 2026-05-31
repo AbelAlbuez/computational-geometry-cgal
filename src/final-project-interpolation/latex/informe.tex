@@ -264,36 +264,98 @@ exterior de mayor extensión, descartando lazos parásitos
 típicos cuando los contornos fuente difieren mucho en forma.
 
 % =====================================================================
-\section{Resultados Preliminares}
+\section{Resultados}
 \label{sec:resultados}
 % =====================================================================
-Se ejecutó el pipeline completo sobre el caso
-\textit{BraTS-GLI-00008-100}, slices axiales $z = 70$ y
-$z = 71$, dos cortes consecutivos del tumor activo. La
-Tabla~\ref{tab:resultados} resume los conteos de vértices
-en cada etapa del pipeline.
+
+\subsection{Configuración experimental}
+\label{sec:resultados:config}
+La evaluación se realizó sobre el dataset
+\textit{BraTS 2024 GLI} restringido al label
+\textit{Enhancing Tumor} (ET, valor~$3$). Los contornos se
+extrajeron por slice axial mediante \texttt{scikit-image} y
+se serializaron en formato \texttt{.obj} 2D. Sobre este
+corpus se ejecutaron \textbf{94} pares de slices con
+parámetro de interpolación fijo $t = 0{,}5$:
+\begin{itemize}
+  \item \textbf{5 pares de referencia} con slices
+        consecutivos o moderadamente separados dentro de un
+        mismo caso, usados durante el desarrollo;
+  \item \textbf{84 pares extremos} formados por el primer y
+        el último slice con ET de cada caso (sólo casos con
+        al menos $3$ slices), pensados para maximizar la
+        diferencia morfológica entre $A$ y $B$;
+  \item \textbf{5 pares cruzados} entre casos distintos
+        (primer slice del caso $i$ contra último slice del
+        caso $(i{+}1)$), como fallback para forzar
+        correspondencias deliberadamente erróneas.
+\end{itemize}
+Cada ejecución produce un \texttt{.obj} 3D y una
+visualización PNG con los dos contornos fuente y el contorno
+interpolado superpuestos.
+
+\subsection{Pares de referencia}
+\label{sec:resultados:ref}
+La Tabla~\ref{tab:resultados:ref} reporta los conteos de
+vértices y el estado de auto-intersección para los cinco
+pares de referencia. La columna \emph{Resampleados} indica
+el número común de vértices tras el
+\textit{resampling}, igual a $\max(|A|,|B|)$.
 
 \begin{table}[!t]
 \centering
-\caption{Resultado de un par de slices consecutivos del caso
-\textit{BraTS-GLI-00008-100}.}
-\label{tab:resultados}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}lr@{}}
+\caption{Pares de referencia.}
+\label{tab:resultados:ref}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+\footnotesize
+\begin{tabular}{@{}llrrrrc@{}}
 \toprule
-\textbf{Etapa} & \textbf{Vértices} \\
+\textbf{Caso} & \textbf{A$\rightarrow$B} &
+\textbf{$|A|$} & \textbf{$|B|$} & \textbf{Resam.} &
+\textbf{Auto-int.} \\
 \midrule
-Contorno A (slice 70)               & 32 \\
-Contorno B (slice 71)               & 30 \\
-Resampling común                    & 32 \\
-Contorno interpolado ($t = 0{,}5$)  & 32 \\
-\midrule
-Auto-intersecciones detectadas      & 0 \\
+00008-100 & 0070\,$\rightarrow$\,0071 & 32 & 30 & 32 & No \\
+00008-100 & 0066\,$\rightarrow$\,0072 & 14 & 24 & 24 & No \\
+00008-102 & 0048\,$\rightarrow$\,0059 & 14 & 24 & 24 & No \\
+00008-101 & 0070\,$\rightarrow$\,0071 & 26 & 20 & 26 & No \\
+00008-102 & 0048\,$\rightarrow$\,0049 & 14 & 26 & 26 & No \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-La salida cruda producida por el ejecutable es:
+\subsection{Resultados globales}
+\label{sec:resultados:global}
+Sobre el total de 94 pares ejecutados, el barrido de
+Bentley--Ottmann no reportó auto-intersecciones en ningún
+caso (0/94, 0\%). En consecuencia, el
+\texttt{SelfIntersectionResolver} retornó el contorno
+original sin modificación en el 100\% de las ejecuciones, y
+los 94 contornos interpolados resultantes son polígonos
+simples válidos. La Tabla~\ref{tab:resultados:global}
+resume estas métricas agregadas.
+
+\begin{table}[!t]
+\centering
+\caption{Métricas agregadas sobre los 94 pares.}
+\label{tab:resultados:global}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Pares ejecutados                          & 94 \\
+\quad Pares de referencia                 & 5  \\
+\quad Pares extremos (primer vs último)   & 84 \\
+\quad Pares cruzados entre casos          & 5  \\
+Pares con auto-intersección detectada     & 0 \\
+Porcentaje sin auto-intersecciones        & 100\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La salida cruda del ejecutable para un par de referencia
+ilustra el formato textual:
 
 \begin{lstlisting}[language=bash, numbers=none,
                    caption={Salida de \texttt{contour\_interpolator}
@@ -306,11 +368,79 @@ Self-intersections detected: no
 Result written to output/contour_interpolated.obj
 \end{lstlisting}
 
-Como ambos contornos provienen de slices contiguos y
-morfológicamente similares, la interpolación lineal directa
-no produce auto-intersecciones, por lo que el
-\texttt{SelfIntersectionResolver} retorna el contorno tal
-cual. El archivo de salida se escribe en formato \texttt{.obj}
+\subsection{Análisis geométrico}
+\label{sec:resultados:analisis}
+Los contornos ET extraídos de BraTS son aproximadamente
+convexos y morfológicamente suaves entre slices
+consecutivos: el tumor activo, al estar delimitado por
+realce de contraste, suele formar regiones blob-like sin
+cavidades profundas. La interpolación lineal vértice a
+vértice tras un \textit{resampling} por longitud de arco
+preserva esta propiedad, ya que el promedio ponderado
+$(1-t)\,a_i + t\,b_i$ de dos puntos correspondientes en
+contornos convexos alineados produce nuevamente un contorno
+convexo (o casi convexo) sin cruces.
+
+Este comportamiento se mantuvo incluso para los pares
+extremos, donde la diferencia entre el primer y último slice
+puede ser de varias decenas de cortes y los conteos de
+vértices varían fuertemente entre $A$ y $B$ (por ejemplo,
+$|A| = 22$ frente a $|B| = 74$ en
+\textit{BraTS-GLI-02060-100}). El \textit{resampling} igualó
+los conteos en todos los casos y la interpolación produjo un
+polígono simple. En los pares cruzados, pese a que los
+contornos provienen de casos distintos y por lo tanto
+representan tumores ubicados en regiones cerebrales
+diferentes, las posiciones absolutas en la malla original
+$240 \times 240$ y el promediado a $t = 0{,}5$ siguen
+arrojando un contorno simple.
+
+Para activar de forma sistemática el resolver es necesario
+inducir auto-intersecciones de forma controlada, ya sea
+seleccionando contornos con concavidades pronunciadas
+(formas en \emph{C} o \emph{U}, presentes en estadios
+post-quirúrgicos o tumores multilobulares), rotando el array
+de vértices de $B$ para forzar correspondencias erróneas, o
+aplicando transformaciones geométricas previas a la
+interpolación. Estas variantes se dejan como trabajo futuro
+inmediato.
+
+\subsection{Visualizaciones}
+\label{sec:resultados:figuras}
+Las Figuras~\ref{fig:ref} y~\ref{fig:extremo_cruzado}
+muestran cuatro PNGs representativos generados por el
+\textit{driver} de Python. En cada figura se grafican los
+contornos fuente $A$ (azul punteado) y $B$ (rojo punteado),
+y el contorno interpolado a $t = 0{,}5$ (verde sólido con
+marcadores).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.46\columnwidth]{../output/caso1_consec.png}
+\includegraphics[width=0.46\columnwidth]{../output/caso2_sep6.png}
+\caption{Pares de referencia del caso
+\textit{BraTS-GLI-00008-100}. Izquierda: slices consecutivos
+$0070 \rightarrow 0071$ (separación 1). Derecha: slices
+separados por 6 cortes, $0066 \rightarrow 0072$. Sin
+auto-intersecciones.}
+\label{fig:ref}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.46\columnwidth]{../output/BraTS-GLI-02060-100_extremos.png}
+\includegraphics[width=0.46\columnwidth]{../output/cross_00_BraTS-GLI-00008-100_vs_BraTS-GLI-00008-101.png}
+\caption{Izquierda: par extremo del caso
+\textit{BraTS-GLI-02060-100}, primer ($0049$) contra último
+slice ($0099$) con ET (separación 50; $|A|=22$, $|B|=74$).
+Derecha: par cruzado entre casos
+\textit{BraTS-GLI-00008-100} (slice $0066$) y
+\textit{BraTS-GLI-00008-101} (slice $0072$). Ambos pares se
+resuelven sin auto-intersecciones.}
+\label{fig:extremo_cruzado}
+\end{figure}
+
+El archivo de salida se escribe en formato \texttt{.obj}
 3D con $z = 0{,}0$ por vértice, lo que asegura compatibilidad
 con visores estándar como ParaView, Online 3D Viewer e
 ImageToSTL.

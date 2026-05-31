@@ -275,87 +275,64 @@ La evaluación se realizó sobre el dataset
 \textit{Enhancing Tumor} (ET, valor~$3$). Los contornos se
 extrajeron por slice axial mediante \texttt{scikit-image} y
 se serializaron en formato \texttt{.obj} 2D. Sobre este
-corpus se ejecutaron \textbf{94} pares de slices con
-parámetro de interpolación fijo $t = 0{,}5$:
-\begin{itemize}
-  \item \textbf{5 pares de referencia} con slices
-        consecutivos o moderadamente separados dentro de un
-        mismo caso, usados durante el desarrollo;
-  \item \textbf{84 pares extremos} formados por el primer y
-        el último slice con ET de cada caso (sólo casos con
-        al menos $3$ slices), pensados para maximizar la
-        diferencia morfológica entre $A$ y $B$;
-  \item \textbf{5 pares cruzados} entre casos distintos
-        (primer slice del caso $i$ contra último slice del
-        caso $(i{+}1)$), como fallback para forzar
-        correspondencias deliberadamente erróneas.
-\end{itemize}
+corpus se ejecutaron \textbf{4 pares representativos} de
+slices con parámetro de interpolación fijo $t = 0{,}5$,
+cada uno con una intención distinta:
+\begin{enumerate}
+  \item slices consecutivos del mismo caso (variación
+        morfológica mínima);
+  \item slices separados por 6 cortes del mismo caso
+        (variación moderada);
+  \item par extremo (primer y último slice con ET) dentro de
+        un mismo caso (variación máxima intra-caso);
+  \item par cruzado entre dos casos distintos (primer slice
+        del caso $X$ contra primer slice del caso $Y$).
+\end{enumerate}
 Cada ejecución produce un \texttt{.obj} 3D y una
 visualización PNG con los dos contornos fuente y el contorno
 interpolado superpuestos.
 
-\subsection{Pares de referencia}
-\label{sec:resultados:ref}
-La Tabla~\ref{tab:resultados:ref} reporta los conteos de
-vértices y el estado de auto-intersección para los cinco
-pares de referencia. La columna \emph{Resampleados} indica
-el número común de vértices tras el
-\textit{resampling}, igual a $\max(|A|,|B|)$.
+\subsection{Tabla de resultados}
+\label{sec:resultados:tabla}
+La Tabla~\ref{tab:resultados} reporta los conteos de
+vértices y el estado de auto-intersección para los cuatro
+pares. La columna \emph{Resam.} indica el número común de
+vértices tras el \textit{resampling}, igual a
+$\max(|A|,|B|)$.
 
 \begin{table}[!t]
 \centering
-\caption{Pares de referencia.}
-\label{tab:resultados:ref}
+\caption{Resultados de los 4 pares representativos
+($t = 0{,}5$).}
+\label{tab:resultados}
 \renewcommand{\arraystretch}{1.15}
 \setlength{\tabcolsep}{4pt}
 \footnotesize
-\begin{tabular}{@{}llrrrrc@{}}
+\begin{tabular}{@{}llrrrc@{}}
 \toprule
 \textbf{Caso} & \textbf{A$\rightarrow$B} &
 \textbf{$|A|$} & \textbf{$|B|$} & \textbf{Resam.} &
 \textbf{Auto-int.} \\
 \midrule
-00008-100 & 0070\,$\rightarrow$\,0071 & 32 & 30 & 32 & No \\
-00008-100 & 0066\,$\rightarrow$\,0072 & 14 & 24 & 24 & No \\
-00008-102 & 0048\,$\rightarrow$\,0059 & 14 & 24 & 24 & No \\
-00008-101 & 0070\,$\rightarrow$\,0071 & 26 & 20 & 26 & No \\
-00008-102 & 0048\,$\rightarrow$\,0049 & 14 & 26 & 26 & No \\
+00008-100 (consecutivos) & 0070\,$\rightarrow$\,0071 &
+  32 & 30 & 32 & No \\
+00008-100 (separados 6)  & 0066\,$\rightarrow$\,0072 &
+  14 & 24 & 24 & No \\
+00008-101 (extremos)     & 0070\,$\rightarrow$\,0072 &
+  26 & 16 & 26 & No \\
+100 \emph{vs} 101 (cruzado) & 0066\,$\rightarrow$\,0070 &
+  14 & 26 & 26 & No \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Resultados globales}
-\label{sec:resultados:global}
-Sobre el total de 94 pares ejecutados, el barrido de
-Bentley--Ottmann no reportó auto-intersecciones en ningún
-caso (0/94, 0\%). En consecuencia, el
+En los cuatro casos el barrido de Bentley--Ottmann no
+reportó auto-intersecciones, por lo que el
 \texttt{SelfIntersectionResolver} retornó el contorno
-original sin modificación en el 100\% de las ejecuciones, y
-los 94 contornos interpolados resultantes son polígonos
-simples válidos. La Tabla~\ref{tab:resultados:global}
-resume estas métricas agregadas.
-
-\begin{table}[!t]
-\centering
-\caption{Métricas agregadas sobre los 94 pares.}
-\label{tab:resultados:global}
-\renewcommand{\arraystretch}{1.15}
-\begin{tabular}{@{}lr@{}}
-\toprule
-\textbf{Métrica} & \textbf{Valor} \\
-\midrule
-Pares ejecutados                          & 94 \\
-\quad Pares de referencia                 & 5  \\
-\quad Pares extremos (primer vs último)   & 84 \\
-\quad Pares cruzados entre casos          & 5  \\
-Pares con auto-intersección detectada     & 0 \\
-Porcentaje sin auto-intersecciones        & 100\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-La salida cruda del ejecutable para un par de referencia
-ilustra el formato textual:
+original sin modificación. Los cuatro contornos
+interpolados resultantes son polígonos simples válidos. La
+salida cruda del ejecutable para el primer par ilustra el
+formato textual:
 
 \begin{lstlisting}[language=bash, numbers=none,
                    caption={Salida de \texttt{contour\_interpolator}
@@ -379,64 +356,47 @@ vértice tras un \textit{resampling} por longitud de arco
 preserva esta propiedad, ya que el promedio ponderado
 $(1-t)\,a_i + t\,b_i$ de dos puntos correspondientes en
 contornos convexos alineados produce nuevamente un contorno
-convexo (o casi convexo) sin cruces.
-
-Este comportamiento se mantuvo incluso para los pares
-extremos, donde la diferencia entre el primer y último slice
-puede ser de varias decenas de cortes y los conteos de
-vértices varían fuertemente entre $A$ y $B$ (por ejemplo,
-$|A| = 22$ frente a $|B| = 74$ en
-\textit{BraTS-GLI-02060-100}). El \textit{resampling} igualó
-los conteos en todos los casos y la interpolación produjo un
-polígono simple. En los pares cruzados, pese a que los
-contornos provienen de casos distintos y por lo tanto
-representan tumores ubicados en regiones cerebrales
-diferentes, las posiciones absolutas en la malla original
-$240 \times 240$ y el promediado a $t = 0{,}5$ siguen
-arrojando un contorno simple.
-
-Para activar de forma sistemática el resolver es necesario
-inducir auto-intersecciones de forma controlada, ya sea
-seleccionando contornos con concavidades pronunciadas
-(formas en \emph{C} o \emph{U}, presentes en estadios
-post-quirúrgicos o tumores multilobulares), rotando el array
-de vértices de $B$ para forzar correspondencias erróneas, o
-aplicando transformaciones geométricas previas a la
-interpolación. Estas variantes se dejan como trabajo futuro
-inmediato.
+convexo (o casi convexo) sin cruces. Esto explica que ni
+siquiera el par extremo (slices muy separados con
+$|A|=26$ frente a $|B|=16$) ni el par cruzado entre dos
+casos distintos activen el resolver. Para inducir
+auto-intersecciones de forma sistemática se requieren
+contornos con concavidades pronunciadas (formas en \emph{C}
+o \emph{U}, presentes en tumores multilobulares o estadios
+post-quirúrgicos) o transformaciones que rompan la
+correspondencia natural entre los arrays de vértices.
 
 \subsection{Visualizaciones}
 \label{sec:resultados:figuras}
 Las Figuras~\ref{fig:ref} y~\ref{fig:extremo_cruzado}
-muestran cuatro PNGs representativos generados por el
-\textit{driver} de Python. En cada figura se grafican los
-contornos fuente $A$ (azul punteado) y $B$ (rojo punteado),
-y el contorno interpolado a $t = 0{,}5$ (verde sólido con
-marcadores).
+muestran los cuatro PNGs generados. En cada gráfico se
+dibujan los contornos fuente $A$ (azul punteado) y $B$ (rojo
+punteado), y el contorno interpolado a $t = 0{,}5$ (verde
+sólido con marcadores).
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.46\columnwidth]{../output/caso1_consec.png}
-\includegraphics[width=0.46\columnwidth]{../output/caso2_sep6.png}
-\caption{Pares de referencia del caso
-\textit{BraTS-GLI-00008-100}. Izquierda: slices consecutivos
-$0070 \rightarrow 0071$ (separación 1). Derecha: slices
-separados por 6 cortes, $0066 \rightarrow 0072$. Sin
+\includegraphics[width=0.46\columnwidth]{../output/caso1_consecutivos.png}
+\includegraphics[width=0.46\columnwidth]{../output/caso2_separados.png}
+\caption{Caso \textit{BraTS-GLI-00008-100}. Izquierda:
+slices consecutivos $0070 \rightarrow 0071$ (separación 1).
+Derecha: slices separados por 6 cortes,
+$0066 \rightarrow 0072$. Ambos resueltos sin
 auto-intersecciones.}
 \label{fig:ref}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.46\columnwidth]{../output/BraTS-GLI-02060-100_extremos.png}
-\includegraphics[width=0.46\columnwidth]{../output/cross_00_BraTS-GLI-00008-100_vs_BraTS-GLI-00008-101.png}
+\includegraphics[width=0.46\columnwidth]{../output/caso3_extremos.png}
+\includegraphics[width=0.46\columnwidth]{../output/caso4_cruzado.png}
 \caption{Izquierda: par extremo del caso
-\textit{BraTS-GLI-02060-100}, primer ($0049$) contra último
-slice ($0099$) con ET (separación 50; $|A|=22$, $|B|=74$).
-Derecha: par cruzado entre casos
-\textit{BraTS-GLI-00008-100} (slice $0066$) y
-\textit{BraTS-GLI-00008-101} (slice $0072$). Ambos pares se
-resuelven sin auto-intersecciones.}
+\textit{BraTS-GLI-00008-101}, primer ($0070$) contra último
+slice ($0072$) con ET ($|A|=26$, $|B|=16$). Derecha: par
+cruzado, primer slice de \textit{BraTS-GLI-00008-100}
+($0066$) contra primer slice de
+\textit{BraTS-GLI-00008-101} ($0070$). Ambos resueltos sin
+auto-intersecciones.}
 \label{fig:extremo_cruzado}
 \end{figure}
 

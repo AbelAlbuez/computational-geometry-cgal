@@ -1,5 +1,5 @@
 """
-Corre múltiples pares de slices de BraTS, genera .obj interpolados y PNGs.
+Corre 4 pares representativos de slices BraTS, genera .obj interpolados y PNGs.
 
 Uso:
     python scripts/run_examples.py
@@ -28,30 +28,6 @@ def load_viz():
     return mod
 
 
-def first_two_slices(case):
-    objs = sorted((CONTOURS / case).glob("*.obj"))
-    if len(objs) < 2:
-        return None
-    return objs[0].stem, objs[1].stem
-
-
-def find_extreme_pairs():
-    """Primer y último slice de cada caso con al menos 3 slices."""
-    pairs = []
-    for case_dir in sorted(CONTOURS.iterdir()):
-        if not case_dir.is_dir():
-            continue
-        slices = sorted(case_dir.glob("slice_*.obj"))
-        if len(slices) >= 3:
-            pairs.append({
-                "case": case_dir.name,
-                "slice_a": slices[0].stem,
-                "slice_b": slices[-1].stem,
-                "label": f"{case_dir.name}_extremos",
-            })
-    return pairs
-
-
 def _parse_stats(stdout):
     stats = {"va": None, "vb": None, "vp": None, "self_int": None}
     for line in stdout.splitlines():
@@ -68,23 +44,16 @@ def _parse_stats(stdout):
 
 
 def run_pair(pair, viz):
-    case = pair["case"]
-    sa = pair["slice_a"]
-    sb = pair["slice_b"]
     label = pair["label"]
-    obj_a = Path(pair.get("obj_a", CONTOURS / case / f"{sa}.obj"))
-    obj_b = Path(pair.get("obj_b", CONTOURS / case / f"{sb}.obj"))
+    obj_a = pair["obj_a"]
+    obj_b = pair["obj_b"]
     out_obj = OUTPUT / f"{label}_interpolated.obj"
     out_png = OUTPUT / f"{label}.png"
 
-    print(f"=== {label}  ({case}: {sa} -> {sb}) ===")
-    if not obj_a.exists() or not obj_b.exists():
-        missing = [str(p) for p in (obj_a, obj_b) if not p.exists()]
-        print(f"  [SKIP] archivos faltantes: {missing}")
-        return {"label": label, "case": case, "sa": sa, "sb": sb,
-                "status": "skipped", "reason": "missing"}
+    print(f"=== {label}  ({pair['descripcion']}) ===")
+    print(f"  A: {obj_a.relative_to(ROOT)}")
+    print(f"  B: {obj_b.relative_to(ROOT)}")
 
-    # 1) Ejecutar el binario C++.
     proc = subprocess.run(
         [str(BINARY), str(obj_a), str(obj_b)],
         cwd=str(ROOT),
@@ -94,139 +63,123 @@ def run_pair(pair, viz):
     print(proc.stdout, end="")
     if proc.returncode != 0:
         print(proc.stderr, end="")
-        return {"label": label, "case": case, "sa": sa, "sb": sb,
-                "status": "error", "reason": "binary"}
+        return {**pair, "status": "error"}
 
     stats = _parse_stats(proc.stdout)
+    shutil.copy2(OUTPUT / "contour_interpolated.obj", out_obj)
 
-    # 2) Copiar el .obj resultante con el nombre del caso.
-    src_obj = OUTPUT / "contour_interpolated.obj"
-    shutil.copy2(src_obj, out_obj)
-
-    # 3) Generar el PNG llamando a visualize_results como módulo.
     sys.argv = [
         "visualize_results.py",
         str(obj_a), str(obj_b), str(out_obj), str(out_png),
     ]
     viz.main()
     print()
-    return {"label": label, "case": case, "sa": sa, "sb": sb,
-            "status": "ok", "png": out_png, "obj": out_obj, **stats}
+    return {**pair, "status": "ok", "png": out_png, "obj": out_obj, **stats}
+
+
+def _resolve_pair(spec):
+    """Resuelve los paths reales (obj_a, obj_b) y los nombres de slice."""
+    label = spec["label"]
+    sa_desc = spec["slice_a"]
+    sb_desc = spec["slice_b"]
+
+    if spec["label"] == "caso4_cruzado":
+        # Cruzado: primer slice de dos casos distintos.
+        case_a = "BraTS-GLI-00008-100"
+        case_b = "BraTS-GLI-00008-101"
+        obj_a = sorted((CONTOURS / case_a).glob("slice_*.obj"))[0]
+        obj_b = sorted((CONTOURS / case_b).glob("slice_*.obj"))[0]
+        return {
+            "label": label,
+            "case": f"{case_a} vs {case_b}",
+            "descripcion": spec["descripcion"],
+            "slice_a": obj_a.stem,
+            "slice_b": obj_b.stem,
+            "obj_a": obj_a,
+            "obj_b": obj_b,
+        }
+
+    case = spec["case"]
+    slices = sorted((CONTOURS / case).glob("slice_*.obj"))
+    if sa_desc == "primer slice disponible":
+        obj_a = slices[0]
+        sa = obj_a.stem
+    else:
+        obj_a = CONTOURS / case / f"{sa_desc}.obj"
+        sa = sa_desc
+    if sb_desc == "último slice disponible":
+        obj_b = slices[-1]
+        sb = obj_b.stem
+    else:
+        obj_b = CONTOURS / case / f"{sb_desc}.obj"
+        sb = sb_desc
+    return {
+        "label": label,
+        "case": case,
+        "descripcion": spec["descripcion"],
+        "slice_a": sa,
+        "slice_b": sb,
+        "obj_a": obj_a,
+        "obj_b": obj_b,
+    }
+
+
+PAIRS = [
+    {
+        "case": "BraTS-GLI-00008-100",
+        "slice_a": "slice_0070",
+        "slice_b": "slice_0071",
+        "label": "caso1_consecutivos",
+        "descripcion": "Slices consecutivos",
+    },
+    {
+        "case": "BraTS-GLI-00008-100",
+        "slice_a": "slice_0066",
+        "slice_b": "slice_0072",
+        "label": "caso2_separados",
+        "descripcion": "Slices separados 6",
+    },
+    {
+        "case": "BraTS-GLI-00008-101",
+        "slice_a": "primer slice disponible",
+        "slice_b": "último slice disponible",
+        "label": "caso3_extremos",
+        "descripcion": "Par extremo mismo caso",
+    },
+    {
+        "case": "BraTS-GLI-00008-100 vs BraTS-GLI-00008-101",
+        "slice_a": "primer slice de BraTS-GLI-00008-100",
+        "slice_b": "primer slice de BraTS-GLI-00008-101",
+        "label": "caso4_cruzado",
+        "descripcion": "Par cruzado entre casos",
+    },
+]
 
 
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
-
-    PAIRS = [
-        {"case": "BraTS-GLI-00008-100",
-         "slice_a": "slice_0070", "slice_b": "slice_0071",
-         "label": "caso1_consec"},
-        # Slices separados ~6 dentro del mismo caso (los 60/65/75/80 pedidos
-        # originalmente no fueron extraídos por el pipeline de Python para
-        # este caso; usamos los disponibles más distantes).
-        {"case": "BraTS-GLI-00008-100",
-         "slice_a": "slice_0066", "slice_b": "slice_0072",
-         "label": "caso2_sep6"},
-        # Slices muy separados en el caso 102 (rango 0048..0059, 11 de gap).
-        {"case": "BraTS-GLI-00008-102",
-         "slice_a": "slice_0048", "slice_b": "slice_0059",
-         "label": "caso3_sep11"},
-    ]
-
-    # Casos 4 y 5: primeros dos slices con ET disponibles.
-    for case, label in [("BraTS-GLI-00008-101", "caso4_nuevo"),
-                        ("BraTS-GLI-00008-102", "caso5_nuevo")]:
-        pair = first_two_slices(case)
-        if pair is None:
-            print(f"[WARN] {case} no tiene al menos dos .obj; se omite.")
-            continue
-        sa, sb = pair
-        PAIRS.append({"case": case, "slice_a": sa, "slice_b": sb,
-                      "label": label})
-
-    # Pares extremos (primer vs último slice) de cada caso con >=3 slices.
-    extreme = find_extreme_pairs()
-    print(f"[INFO] Pares extremos detectados: {len(extreme)}")
-    PAIRS.extend(extreme)
-
     viz = load_viz()
-    results = [run_pair(p, viz) for p in PAIRS]
+    resolved = [_resolve_pair(p) for p in PAIRS]
+    results = [run_pair(p, viz) for p in resolved]
 
-    # ------------------------------------------------------------------
-    # Tabla resumen.
-    # ------------------------------------------------------------------
     print("=" * 92)
     print("Resumen:")
-    header = f"  {'label':<38} {'caso':<22} {'slices':<24} {'A':>4} {'B':>4} {'self-int':>9}"
+    header = (f"  {'label':<22} {'caso':<40} "
+              f"{'A':>4} {'B':>4} {'self-int':>9}")
     print(header)
     print("  " + "-" * (len(header) - 2))
-    ok_results = []
     for r in results:
         if r["status"] != "ok":
-            print(f"  {r['label']:<38} {r['case']:<22} "
-                  f"{r['sa']+'  '+r['sb']:<24} "
-                  f"[{r['status']}]")
+            print(f"  {r['label']:<22} {r['case']:<40} [error]")
             continue
-        ok_results.append(r)
         si = "yes" if r.get("self_int") else "no"
-        print(f"  {r['label']:<38} {r['case']:<22} "
-              f"{r['sa']+'  '+r['sb']:<24} "
-              f"{str(r.get('va','?')):>4} {str(r.get('vb','?')):>4} {si:>9}")
+        print(f"  {r['label']:<22} {r['case']:<40} "
+              f"{str(r.get('va','?')):>4} {str(r.get('vb','?')):>4} "
+              f"{si:>9}")
 
-    # ------------------------------------------------------------------
-    # Detección de auto-intersecciones; si ninguno, probar pares cruzados.
-    # ------------------------------------------------------------------
-    intersected = [r for r in ok_results if r.get("self_int")]
-    if intersected:
-        print("\nPares con auto-intersecciones:")
-        for r in intersected:
-            print(f"  * {r['label']}  ({r['case']}: {r['sa']} -> {r['sb']})")
-    else:
-        print("\nAVISO: ningún par generó auto-intersecciones. "
-              "Considerar pares entre casos distintos.")
-        print("Probando pares cruzados (primer slice de X vs último de Y)...\n")
-
-        cases = sorted(
-            d for d in CONTOURS.iterdir()
-            if d.is_dir() and len(sorted(d.glob("slice_*.obj"))) >= 2
-        )
-        cross_pairs = []
-        for i, ca in enumerate(cases[:5]):
-            cb = cases[(i + 1) % len(cases[:5])]
-            if ca == cb:
-                continue
-            sa_path = sorted(ca.glob("slice_*.obj"))[0]
-            sb_path = sorted(cb.glob("slice_*.obj"))[-1]
-            cross_pairs.append({
-                "case": f"{ca.name}__x__{cb.name}",
-                "slice_a": sa_path.stem,
-                "slice_b": sb_path.stem,
-                "label": f"cross_{i:02d}_{ca.name}_vs_{cb.name}",
-                "obj_a": sa_path,
-                "obj_b": sb_path,
-            })
-
-        cross_results = [run_pair(p, viz) for p in cross_pairs]
-        cross_ok = [r for r in cross_results if r["status"] == "ok"]
-        cross_int = [r for r in cross_ok if r.get("self_int")]
-        print("-" * 92)
-        print("Resumen pares cruzados:")
-        for r in cross_ok:
-            si = "yes" if r.get("self_int") else "no"
-            print(f"  {r['label']:<60} A={r.get('va','?'):>4} "
-                  f"B={r.get('vb','?'):>4}  self-int={si}")
-        if cross_int:
-            print("\nPares cruzados con auto-intersecciones:")
-            for r in cross_int:
-                print(f"  * {r['label']}")
-        else:
-            print("\n(Ningún par cruzado generó auto-intersecciones tampoco.)")
-
-        ok_results.extend(cross_ok)
-
-    ok_pngs = [r["png"] for r in ok_results]
-    if ok_pngs:
-        print(f"\n{len(ok_pngs)} PNGs generados en {OUTPUT}/")
+    ok = [r for r in results if r["status"] == "ok"]
+    print(f"\n{len(ok)} PNGs y {len(ok)} .obj generados en "
+          f"{OUTPUT.relative_to(ROOT.parent.parent)}/")
 
 
 if __name__ == "__main__":

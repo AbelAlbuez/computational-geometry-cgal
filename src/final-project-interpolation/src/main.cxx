@@ -19,9 +19,9 @@
 #include <string>
 
 #include "ContourInterpolator.h"
-#include "ContourResampler.h"
-#include "LinearInterpolator.h"
-#include "SelfIntersectionResolver.h"
+#include "interpolation-lineal/ContourResampler.h"
+#include "interpolation-lineal/LinearInterpolator.h"
+#include "interpolation-lineal/SelfIntersectionResolver.h"
 
 using TInterp    = pujCGAL::Final::ContourInterpolator;
 using TResampler = pujCGAL::Final::ContourResampler;

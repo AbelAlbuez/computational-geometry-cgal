@@ -44,10 +44,10 @@ target_compile_features(contour_interpolator PRIVATE cxx_std_20)
 # -- Register new header-only modules with the existing target so IDEs and
 #    dependency tracking pick them up.
 target_sources(contour_interpolator PRIVATE
-  src/ContourResampler.h
-  src/ContourResampler.hxx
-  src/LinearInterpolator.h
-  src/LinearInterpolator.hxx
-  src/SelfIntersectionResolver.h
-  src/SelfIntersectionResolver.hxx
+  src/interpolation-lineal/ContourResampler.h
+  src/interpolation-lineal/ContourResampler.hxx
+  src/interpolation-lineal/LinearInterpolator.h
+  src/interpolation-lineal/LinearInterpolator.hxx
+  src/interpolation-lineal/SelfIntersectionResolver.h
+  src/interpolation-lineal/SelfIntersectionResolver.hxx
 )

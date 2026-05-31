@@ -1,0 +1,376 @@
+\documentclass[conference]{IEEEtran}
+
+% ── Paquetes ──────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{cite}
+\usepackage{url}
+
+% ── Estilo de listados de código ─────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{green!40!black}\itshape,
+  stringstyle=\color{red!60!black},
+  language=C++,
+  showstringspaces=false,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  frame=single,
+  breaklines=true,
+  tabsize=2,
+  captionpos=b
+}
+
+% ── Metadatos ────────────────────────────────────────────────────
+\title{Interpolación Geométrica de Contornos de Gliomas entre
+Slices de Resonancia Magnética}
+
+\author{\IEEEauthorblockN{Abel Albuez, Santiago Gil Gallego y
+Jesús Alberto}
+\IEEEauthorblockA{Maestría en Ingeniería de Sistemas y Computación\\
+Pontificia Universidad Javeriana, Bogotá D.C., Colombia\\
+Profesor: Leonardo Flórez-Valencia \quad
+Geometría Computacional \quad 2026\\
+Repositorio: \url{https://github.com/AbelAlbuez/computational-geometry-cgal}}}
+
+\begin{document}
+
+\maketitle
+
+% ── Abstract ─────────────────────────────────────────────────────
+\begin{abstract}
+Se presenta un módulo de interpolación geométrica entre
+contornos 2D del tumor activo (\textit{Enhancing Tumor}, ET)
+extraídos de cortes axiales consecutivos de resonancia
+magnética cerebral. Sobre el dataset público
+\textit{BraTS 2024 GLI}, los contornos se obtienen por slice
+mediante segmentación experta y se almacenan como polilíneas
+cerradas en formato \texttt{.obj}. El módulo, implementado en
+C++17/20 sobre CGAL, encadena (i) un \emph{resampling} por
+longitud de arco que iguala el número de vértices de ambos
+contornos, (ii) una interpolación lineal vértice a vértice y
+(iii) una etapa de detección y resolución de
+auto-intersecciones basada en el algoritmo de
+Bentley--Ottmann provisto por la librería \texttt{pujCGAL}.
+Este informe describe el módulo desarrollado por el
+integrante \textbf{Abel Albuez}, validado sobre el caso
+\textit{BraTS-GLI-00008-100}, slices~70 y~71, y se enmarca
+en una arquitectura mayor cuyos demás componentes son
+responsabilidad de los otros integrantes del equipo.
+\end{abstract}
+
+\begin{IEEEkeywords}
+interpolación de contornos, geometría computacional, CGAL,
+Bentley--Ottmann, BraTS, resonancia magnética, gliomas
+\end{IEEEkeywords}
+
+% =====================================================================
+\section{Introducción}
+% =====================================================================
+La reconstrucción tridimensional de tumores cerebrales a partir
+de secuencias de resonancia magnética (MRI) es una tarea
+relevante para el diagnóstico, la planeación quirúrgica y el
+seguimiento clínico de pacientes con gliomas. Una estrategia
+extendida consiste en segmentar slice por slice la región de
+interés y luego \emph{interpolar} los contornos 2D obtenidos
+para reconstruir una superficie cerrada en 3D.
+
+Este trabajo utiliza el dataset \textit{BraTS 2024
+GLI}~\cite{baid2021brats} (Brain Tumor Segmentation Challenge
+--- Adult Glioma), que provee volúmenes de MRI con
+segmentaciones expertas. De cada volumen se extrae el contorno
+del \textit{Enhancing Tumor} (label ET~$=3$) por slice axial
+mediante \texttt{scikit-image}, obteniendo polígonos cerrados
+almacenados en formato \texttt{.obj}.
+
+La motivación última proviene de la línea de investigación del
+autor sobre segmentación automática de gliomas: una vez
+segmentado el tumor en slices 2D, se requiere un módulo
+geométrico que produzca slices intermedios consistentes
+---sin auto-intersecciones--- para alimentar etapas
+posteriores de reconstrucción volumétrica.
+
+% =====================================================================
+\section{Marco Teórico}
+\label{sec:marco}
+% =====================================================================
+
+\subsection{Interpolación entre slices paralelos}
+Barequet y Sharir~\cite{barequet1996} formalizan el problema
+de interpolación lineal por tramos entre cortes poligonales
+paralelos como un problema de \emph{correspondencia} entre
+vértices: dadas dos poligonales $A$ y $B$ en planos paralelos,
+construir una superficie triangulada que las una. Su trabajo
+establece el marco bajo el cual opera el módulo aquí descrito,
+restringido al caso $|A| = |B|$ (igualando los vértices mediante
+\textit{resampling}) y a la interpolación lineal directa de
+vértices correspondientes.
+
+\subsection{Interpolación en imágenes médicas}
+Meijster y Roerdink~\cite{meijster1999} comparan métodos de
+interpolación (vecino más cercano, lineal, cúbica, basada en
+forma) en el contexto de procesamiento de imágenes médicas.
+Concluyen que la interpolación lineal por vértices ofrece una
+relación calidad/complejidad adecuada para contornos densamente
+muestreados, justificando su uso como \textit{baseline} en este
+módulo antes de considerar variantes basadas en forma o en
+transformadas de distancia.
+
+\subsection{Polígonos auto-intersecantes}
+Souviron~\cite{souviron2013} presenta un esquema de detección
+y corrección de auto-intersecciones en polígonos cerrados con
+memoria mínima. En este trabajo se adopta una estrategia
+equivalente en el espíritu pero apoyada en CGAL: se detectan
+los cruces con el barrido de Bentley--Ottmann y se descompone
+el polígono en sub-lazos, reteniendo el de mayor área. El
+algoritmo de Bentley--Ottmann en sí está implementado dentro
+de la librería \texttt{pujCGAL} provista por el profesor del
+curso.
+
+% =====================================================================
+\section{Metodología --- Módulo de Abel}
+\label{sec:metodologia}
+% =====================================================================
+El módulo está estructurado como una cadena de clases
+independientes sobre el kernel
+\texttt{CGAL::Exact\_predicates\_inexact\_constructions\_kernel}
+y el tipo \texttt{TContour}~$=$
+\texttt{std::vector<Point\_2>}. Las responsabilidades se
+descomponen en cuatro etapas, cada una encapsulada en una
+clase con un único método estático.
+
+% ---------------------------------------------------------------------
+\subsection{Resampling por longitud de arco
+            (\texttt{ContourResampler})}
+% ---------------------------------------------------------------------
+Dado un contorno cerrado $C = \{p_0, p_1, \dots, p_{m-1}\}$,
+se calcula la longitud de arco acumulada
+\begin{equation}
+  s_0 = 0,
+  \qquad
+  s_{i+1} = s_i + \lVert p_{(i+1) \bmod m} - p_i \rVert,
+  \quad i = 0, \dots, m-1,
+\end{equation}
+con $L = s_m$ la longitud total del contorno cerrado.
+
+Para producir un contorno con exactamente $n$ vértices
+uniformemente distribuidos por longitud de arco se evalúa,
+para cada $k \in \{0,\dots,n-1\}$, el parámetro
+$s_k^{\star} = k \, L / n$, se localiza el segmento
+$[p_i, p_{i+1}]$ tal que $s_i \leq s_k^{\star} \leq s_{i+1}$,
+y se interpola
+\begin{equation}
+  u = \frac{s_k^{\star} - s_i}{s_{i+1} - s_i},
+  \qquad
+  q_k = (1 - u)\, p_i + u \, p_{(i+1) \bmod m}.
+\end{equation}
+Esta etapa garantiza la precondición $|A| = |B|$ requerida por
+la interpolación lineal.
+
+% ---------------------------------------------------------------------
+\subsection{Interpolación lineal
+            (\texttt{LinearInterpolator})}
+% ---------------------------------------------------------------------
+Sean $A = \{a_0, \dots, a_{n-1}\}$ y
+$B = \{b_0, \dots, b_{n-1}\}$ dos contornos con el mismo
+número de vértices (tras el \textit{resampling}). El contorno
+interpolado $P(t)$ para $t \in [0,1]$ se define
+componente a componente:
+\begin{equation}
+  P_i(t) = (1 - t)\, a_i + t \, b_i,
+  \qquad i = 0, 1, \dots, n-1.
+\end{equation}
+En particular, $t = 0{,}5$ produce el slice intermedio entre
+$A$ y $B$.
+
+\begin{lstlisting}[caption={Núcleo de la interpolación lineal.}]
+for( std::size_t i = 0; i < n; ++i )
+{
+  const double ax = CGAL::to_double( A[i].x() );
+  const double ay = CGAL::to_double( A[i].y() );
+  const double bx = CGAL::to_double( B[i].x() );
+  const double by = CGAL::to_double( B[i].y() );
+  out.emplace_back( (1.0 - t)*ax + t*bx,
+                    (1.0 - t)*ay + t*by );
+}
+\end{lstlisting}
+
+% ---------------------------------------------------------------------
+\subsection{Detección de auto-intersecciones
+            (\texttt{SelfIntersectionResolver})}
+% ---------------------------------------------------------------------
+El contorno interpolado se convierte primero en un vector de
+segmentos CGAL conectando vértices consecutivos en orden
+circular:
+\begin{equation}
+  S_i = \overline{P_i \, P_{(i+1) \bmod n}},
+  \qquad i = 0,\dots,n-1.
+\end{equation}
+A continuación se invoca el algoritmo de barrido
+Bentley--Ottmann~\cite{souviron2013} provisto por
+\texttt{pujCGAL}:
+
+\begin{lstlisting}[caption={Invocación del barrido
+Bentley--Ottmann de \texttt{pujCGAL}.}]
+std::vector< TPoint > inters;
+pujCGAL::SegmentsIntersection::BentleyOttmann(
+  segs.begin(), segs.end(),
+  std::back_inserter( inters )
+);
+\end{lstlisting}
+
+Se filtran las intersecciones que coinciden con un vértice
+original del contorno (extremos compartidos entre aristas
+consecutivas, que no representan cruces reales). Si el
+conjunto resultante es vacío, el contorno se retorna
+inalterado.
+
+% ---------------------------------------------------------------------
+\subsection{Resolución de cruces}
+% ---------------------------------------------------------------------
+Cuando existen cruces, cada punto de intersección $p_j$ se
+asocia a las dos aristas que lo contienen y se calcula el
+parámetro $t \in [0,1]$ de su posición a lo largo de cada
+arista. Esto permite construir una \emph{traversal subdividida}:
+una lista ordenada que recorre el contorno insertando los
+puntos de cruce en su posición correspondiente.
+
+Sobre esta traversal se aplica un esquema clásico de
+extracción de lazos mediante pila: cuando un punto de
+intersección aparece por segunda vez se cierra un sub-lazo
+con todos los nodos apilados desde su primera aparición. Cada
+sub-lazo $L_k$ tiene un área absoluta dada por la fórmula del
+polígono (\emph{shoelace}):
+\begin{equation}
+  \mathrm{Area}(L_k) =
+  \frac{1}{2}
+  \left|
+    \sum_{i=0}^{|L_k|-1}
+    (x_i \, y_{i+1} - x_{i+1} \, y_i)
+  \right|.
+\end{equation}
+El módulo retiene el sub-lazo $L_{k^{\star}}$ con
+$k^{\star} = \arg\max_k \mathrm{Area}(L_k)$, es decir, el lazo
+exterior de mayor extensión, descartando lazos parásitos
+típicos cuando los contornos fuente difieren mucho en forma.
+
+% =====================================================================
+\section{Resultados Preliminares}
+\label{sec:resultados}
+% =====================================================================
+Se ejecutó el pipeline completo sobre el caso
+\textit{BraTS-GLI-00008-100}, slices axiales $z = 70$ y
+$z = 71$, dos cortes consecutivos del tumor activo. La
+Tabla~\ref{tab:resultados} resume los conteos de vértices
+en cada etapa del pipeline.
+
+\begin{table}[!t]
+\centering
+\caption{Resultado de un par de slices consecutivos del caso
+\textit{BraTS-GLI-00008-100}.}
+\label{tab:resultados}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Etapa} & \textbf{Vértices} \\
+\midrule
+Contorno A (slice 70)               & 32 \\
+Contorno B (slice 71)               & 30 \\
+Resampling común                    & 32 \\
+Contorno interpolado ($t = 0{,}5$)  & 32 \\
+\midrule
+Auto-intersecciones detectadas      & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La salida cruda producida por el ejecutable es:
+
+\begin{lstlisting}[language=bash, numbers=none,
+                   caption={Salida de \texttt{contour\_interpolator}
+                   sobre dos slices consecutivos.}]
+Contour A: 32 vertices
+Contour B: 30 vertices
+Resampled to: 32 vertices
+Interpolated contour: 32 vertices
+Self-intersections detected: no
+Result written to output/contour_interpolated.obj
+\end{lstlisting}
+
+Como ambos contornos provienen de slices contiguos y
+morfológicamente similares, la interpolación lineal directa
+no produce auto-intersecciones, por lo que el
+\texttt{SelfIntersectionResolver} retorna el contorno tal
+cual. El archivo de salida se escribe en formato \texttt{.obj}
+3D con $z = 0{,}0$ por vértice, lo que asegura compatibilidad
+con visores estándar como ParaView, Online 3D Viewer e
+ImageToSTL.
+
+% =====================================================================
+\section{Conclusiones Parciales}
+\label{sec:conclusiones}
+% =====================================================================
+\begin{itemize}
+  \item El pipeline corre de extremo a extremo sobre datos
+        reales del dataset \textit{BraTS 2024 GLI}, generando
+        un contorno interpolado válido en formato
+        \texttt{.obj} 3D que se renderiza en visores externos
+        sin transformaciones adicionales.
+  \item La librería \texttt{pujCGAL} provee el barrido de
+        Bentley--Ottmann en una interfaz tipo \emph{iterator},
+        lo cual evita reimplementar el algoritmo y permite
+        concentrar el esfuerzo del módulo en la lógica de
+        partición y selección de sub-lazos.
+  \item Cada clase (\texttt{ContourResampler},
+        \texttt{LinearInterpolator},
+        \texttt{SelfIntersectionResolver}) tiene una
+        responsabilidad única y opera sobre el tipo común
+        \texttt{TContour}. Esto hace al módulo independiente
+        de los componentes desarrollados por los otros
+        integrantes del equipo y permite integrarlo sin
+        acoplamiento adicional.
+  \item Como trabajo futuro inmediato se contempla evaluar el
+        módulo con pares de slices que produzcan
+        auto-intersecciones reales ---típicamente en los
+        cortes superiores e inferiores del tumor, donde la
+        topología cambia bruscamente--- y comparar la
+        selección por área máxima contra estrategias basadas
+        en orientación o en distancia de Hausdorff entre
+        sub-lazos candidatos.
+\end{itemize}
+
+% =====================================================================
+% ── Referencias ──────────────────────────────────────────────────
+% =====================================================================
+\begin{thebibliography}{9}
+
+\bibitem{barequet1996} G.~Barequet and M.~Sharir,
+``Piecewise-linear interpolation between polygonal slices,''
+\textit{Computer Vision and Image Understanding},
+vol.~63, no.~2, pp.~251--272, 1996.
+
+\bibitem{meijster1999} A.~Meijster and J.~B.~T.~M.~Roerdink,
+``A survey of interpolation methods in medical image
+processing,'' \textit{IEEE Transactions on Medical Imaging},
+1999.
+
+\bibitem{souviron2013} J.~Souviron, ``Correcting
+self-intersecting polygons using minimal memory,''
+\textit{arXiv:1305.4573}, 2013.
+
+\bibitem{baid2021brats} U.~Baid \textit{et al.}, ``The RSNA-ASNR-MICCAI
+BraTS 2021 benchmark on brain tumor segmentation and
+radiogenomic classification,'' \textit{arXiv:2107.02314}, 2021.
+
+\end{thebibliography}
+
+\end{document}

@@ -7,7 +7,6 @@ Uso:
 Debe correrse desde src/final-project-interpolation/ con el venv activado.
 """
 import importlib.util
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -47,15 +46,17 @@ def run_pair(pair, viz):
     label = pair["label"]
     obj_a = pair["obj_a"]
     obj_b = pair["obj_b"]
-    out_obj = OUTPUT / f"{label}_interpolated.obj"
-    out_png = OUTPUT / f"{label}.png"
+    out_dir = OUTPUT / label
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_obj = out_dir / "contour_interpolated.obj"
+    out_png = out_dir / f"{label}.png"
 
     print(f"=== {label}  ({pair['descripcion']}) ===")
     print(f"  A: {obj_a.relative_to(ROOT)}")
     print(f"  B: {obj_b.relative_to(ROOT)}")
 
     proc = subprocess.run(
-        [str(BINARY), str(obj_a), str(obj_b)],
+        [str(BINARY), str(obj_a), str(obj_b), str(out_obj)],
         cwd=str(ROOT),
         capture_output=True,
         text=True,
@@ -66,7 +67,6 @@ def run_pair(pair, viz):
         return {**pair, "status": "error"}
 
     stats = _parse_stats(proc.stdout)
-    shutil.copy2(OUTPUT / "contour_interpolated.obj", out_obj)
 
     sys.argv = [
         "visualize_results.py",

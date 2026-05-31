@@ -288,40 +288,97 @@ cada uno con una intención distinta:
   \item par cruzado entre dos casos distintos (primer slice
         del caso $X$ contra primer slice del caso $Y$).
 \end{enumerate}
+Sobre la versión inicial del interpolador se incorporaron
+\textbf{tres mejoras geométricas} de pre-alineación
+(orientación, centroide y rotación cíclica óptima del punto
+de inicio), descritas en la Sección~\ref{sec:resultados:mejoras}.
 Cada ejecución produce un \texttt{.obj} 3D y una
 visualización PNG con los dos contornos fuente y el contorno
 interpolado superpuestos.
 
+\subsection{Mejoras geométricas implementadas}
+\label{sec:resultados:mejoras}
+
+\subsubsection{Normalización de orientación (CCW)}
+\label{sec:resultados:mejoras:ccw}
+La interpolación lineal vértice a vértice es
+\emph{sensible al sentido de recorrido}: si $A$ está en
+sentido CCW y $B$ en CW, la correspondencia $A_i
+\leftrightarrow B_i$ recorre los contornos en direcciones
+opuestas y produce un polígono retorcido. Para evitarlo se
+calcula el área con signo de cada contorno mediante la
+fórmula \emph{shoelace}:
+\begin{equation}
+  \mathrm{area}(C) =
+  \tfrac{1}{2}\!\sum_{i=0}^{n-1}\!
+  \bigl( x_i\, y_{i+1} - x_{i+1}\, y_i \bigr),
+\end{equation}
+y si $\mathrm{area}(C) < 0$ se invierte el orden de los
+vértices, garantizando que ambos contornos sean CCW antes
+de interpolar.
+
+\subsubsection{Alineación por centroide}
+\label{sec:resultados:mejoras:centroide}
+La interpolación lineal implícitamente promedia las
+posiciones absolutas. Para que la geometría intermedia no
+quede distorsionada por una traslación entre $A$ y $B$, se
+calculan los centroides
+\begin{equation}
+  \bar{c}_A = \frac{1}{|A|}\sum_{i} A_i,
+  \qquad
+  \bar{c}_B = \frac{1}{|B|}\sum_{i} B_i,
+\end{equation}
+se trasladan ambos contornos al origen, se interpola en el
+sistema centrado y el contorno resultante se traslada al
+centroide promedio $\bar{c}_M = \tfrac{1}{2}(\bar{c}_A +
+\bar{c}_B)$.
+
+\subsubsection{Rotación óptima del punto de inicio}
+\label{sec:resultados:mejoras:rotacion}
+Aún con $|A| = |B|$ tras el \textit{resampling}, el primer
+vértice de cada contorno es arbitrario. Una correspondencia
+$A_i \leftrightarrow B_i$ desalineada estira
+innecesariamente las aristas del polígono interpolado. Se
+busca el desplazamiento cíclico $k^{\star}$ que minimiza la
+suma de distancias al cuadrado:
+\begin{equation}
+  k^{\star} \;=\; \arg\min_{k \in \{0,\dots,n-1\}}\;
+  \sum_{i=0}^{n-1}
+  \bigl\lVert A_i - B_{(i+k) \bmod n} \bigr\rVert^{2},
+\end{equation}
+y se aplica $B \leftarrow \mathrm{rotate}(B, k^{\star})$
+antes de interpolar.
+
 \subsection{Tabla de resultados}
 \label{sec:resultados:tabla}
 La Tabla~\ref{tab:resultados} reporta los conteos de
-vértices y el estado de auto-intersección para los cuatro
-pares. La columna \emph{Resam.} indica el número común de
-vértices tras el \textit{resampling}, igual a
-$\max(|A|,|B|)$.
+vértices, la rotación óptima detectada $k^{\star}$ y el
+estado de auto-intersección para los cuatro pares. La
+columna \emph{Resam.} indica el número común de vértices
+tras el \textit{resampling}, igual a $\max(|A|,|B|)$.
 
 \begin{table}[!t]
 \centering
 \caption{Resultados de los 4 pares representativos
-($t = 0{,}5$).}
+($t = 0{,}5$) tras aplicar las mejoras de pre-alineación.}
 \label{tab:resultados}
 \renewcommand{\arraystretch}{1.15}
 \setlength{\tabcolsep}{4pt}
 \footnotesize
-\begin{tabular}{@{}llrrrc@{}}
+\begin{tabular}{@{}llrrrrc@{}}
 \toprule
 \textbf{Caso} & \textbf{A$\rightarrow$B} &
 \textbf{$|A|$} & \textbf{$|B|$} & \textbf{Resam.} &
-\textbf{Auto-int.} \\
+\textbf{$k^{\star}$} & \textbf{Auto-int.} \\
 \midrule
 00008-100 (consecutivos) & 0070\,$\rightarrow$\,0071 &
-  32 & 30 & 32 & No \\
+  32 & 30 & 32 & 0 & No \\
 00008-100 (separados 6)  & 0066\,$\rightarrow$\,0072 &
-  14 & 24 & 24 & No \\
+  14 & 24 & 24 & 1 & No \\
 00008-101 (extremos)     & 0070\,$\rightarrow$\,0072 &
-  26 & 16 & 26 & No \\
+  26 & 16 & 26 & 2 & No \\
 100 \emph{vs} 101 (cruzado) & 0066\,$\rightarrow$\,0070 &
-  14 & 26 & 26 & No \\
+  14 & 26 & 26 & 24 & No \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -340,49 +397,87 @@ formato textual:
 Contour A: 32 vertices
 Contour B: 30 vertices
 Resampled to: 32 vertices
+Optimal rotation of B: 0
 Interpolated contour: 32 vertices
 Self-intersections detected: no
-Result written to output/contour_interpolated.obj
+Result written to output/caso1_consecutivos/contour_interpolated.obj
 \end{lstlisting}
 
-\subsection{Análisis geométrico}
-\label{sec:resultados:analisis}
-Los contornos ET extraídos de BraTS son aproximadamente
-convexos y morfológicamente suaves entre slices
-consecutivos: el tumor activo, al estar delimitado por
-realce de contraste, suele formar regiones blob-like sin
-cavidades profundas. La interpolación lineal vértice a
-vértice tras un \textit{resampling} por longitud de arco
-preserva esta propiedad, ya que el promedio ponderado
-$(1-t)\,a_i + t\,b_i$ de dos puntos correspondientes en
-contornos convexos alineados produce nuevamente un contorno
-convexo (o casi convexo) sin cruces. Esto explica que ni
-siquiera el par extremo (slices muy separados con
-$|A|=26$ frente a $|B|=16$) ni el par cruzado entre dos
-casos distintos activen el resolver. Para inducir
-auto-intersecciones de forma sistemática se requieren
-contornos con concavidades pronunciadas (formas en \emph{C}
-o \emph{U}, presentes en tumores multilobulares o estadios
-post-quirúrgicos) o transformaciones que rompan la
-correspondencia natural entre los arrays de vértices.
+\subsection{Análisis por caso}
+\label{sec:resultados:porcaso}
+
+\textbf{Caso~1 — consecutivos (0070\,$\rightarrow$\,0071,
+$k^{\star}=0$).} Resultado correcto: el contorno interpolado
+queda visiblemente entre $A$ y $B$ y conserva la forma
+general del tumor. La rotación óptima nula indica que las
+parametrizaciones por longitud de arco ya estaban
+naturalmente alineadas; persiste un artefacto leve en la
+zona derecha por la diferencia de forma local entre los dos
+slices.
+
+\textbf{Caso~2 — separados 6 cortes
+(0066\,$\rightarrow$\,0072, $k^{\star}=1$).} Los contornos
+$A$ y $B$ ocupan zonas distintas del plano $xy$. La
+alineación por centroide es la que más aporta aquí: sin
+ella, el interpolado quedaría sesgado hacia el contorno
+mayor. Con ella, el resultado se ubica en el centroide
+promedio $\bar{c}_M$ y es geométricamente válido, aunque
+sin correspondencia anatómica directa con un slice $z$
+intermedio.
+
+\textbf{Caso~3 — extremos del mismo caso
+(0070\,$\rightarrow$\,0072, $k^{\star}=2$).} Mejor
+resultado cualitativo. La rotación óptima no trivial
+($k^{\star}=2$) y la alineación por centroide producen un
+contorno intermedio que captura bien la transición de forma
+entre el primer y el último slice con ET del caso. Es el
+caso donde la mejora de rotación se hace más evidente al
+comparar contra la versión sin pre-alineación.
+
+\textbf{Caso~4 — cruzado entre casos
+(0066\,$\rightarrow$\,0070, $k^{\star}=24$).} Limitación
+intrínseca del método. La rotación elevada ($k^{\star}=24$
+sobre $n=26$, equivalente a casi una vuelta completa)
+revela que no existe una correspondencia natural entre los
+vértices de contornos provenientes de casos distintos. La
+salida es un polígono simple sin auto-intersecciones, pero
+sin significado clínico: representa el promedio geométrico
+entre dos tumores no comparables.
+
+\subsection{Limitación documentada}
+\label{sec:resultados:limitacion}
+La interpolación lineal vértice a vértice asume
+implícitamente que los contornos están alineados
+espacialmente y representan instancias progresivas de una
+misma estructura. Las mejoras de Sección~\ref{sec:resultados:mejoras}
+robustecen esta hipótesis para slices del mismo caso, pero
+no la sustituyen: cuando los contornos pertenecen a
+pacientes distintos o están muy desplazados, el método
+produce una salida geométricamente válida ---polígono
+simple, sin auto-intersecciones--- pero clínicamente
+irrelevante. Métodos basados en \emph{morphing}, distancia
+geodésica o transformadas de distancia con signo resolverían
+mejor este escenario y se consideran como extensión natural
+del módulo.
 
 \subsection{Visualizaciones}
 \label{sec:resultados:figuras}
 Las Figuras~\ref{fig:ref} y~\ref{fig:extremo_cruzado}
-muestran los cuatro PNGs generados. En cada gráfico se
-dibujan los contornos fuente $A$ (azul punteado) y $B$ (rojo
-punteado), y el contorno interpolado a $t = 0{,}5$ (verde
-sólido con marcadores).
+muestran los cuatro PNGs generados con la versión mejorada
+del interpolador. En cada gráfico se dibujan los contornos
+fuente $A$ (azul punteado) y $B$ (rojo punteado), y el
+contorno interpolado a $t = 0{,}5$ (verde sólido con
+marcadores).
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.46\columnwidth]{../output/caso1_consecutivos/caso1_consecutivos.png}
 \includegraphics[width=0.46\columnwidth]{../output/caso2_separados/caso2_separados.png}
-\caption{Caso \textit{BraTS-GLI-00008-100}. Izquierda:
-slices consecutivos $0070 \rightarrow 0071$ (separación 1).
-Derecha: slices separados por 6 cortes,
-$0066 \rightarrow 0072$. Ambos resueltos sin
-auto-intersecciones.}
+\caption{Caso \textit{BraTS-GLI-00008-100} con las mejoras
+de pre-alineación activas. Izquierda: slices consecutivos
+$0070 \rightarrow 0071$, $k^{\star}=0$. Derecha: slices
+separados por 6 cortes, $0066 \rightarrow 0072$,
+$k^{\star}=1$. Ambos resueltos sin auto-intersecciones.}
 \label{fig:ref}
 \end{figure}
 
@@ -392,11 +487,12 @@ auto-intersecciones.}
 \includegraphics[width=0.46\columnwidth]{../output/caso4_cruzado/caso4_cruzado.png}
 \caption{Izquierda: par extremo del caso
 \textit{BraTS-GLI-00008-101}, primer ($0070$) contra último
-slice ($0072$) con ET ($|A|=26$, $|B|=16$). Derecha: par
-cruzado, primer slice de \textit{BraTS-GLI-00008-100}
-($0066$) contra primer slice de
-\textit{BraTS-GLI-00008-101} ($0070$). Ambos resueltos sin
-auto-intersecciones.}
+slice con ET ($0072$), $k^{\star}=2$ (mejor caso
+cualitativo). Derecha: par cruzado entre casos
+\textit{BraTS-GLI-00008-100} ($0066$) y
+\textit{BraTS-GLI-00008-101} ($0070$), $k^{\star}=24$
+(limitación del método ante contornos no alineados
+espacialmente). Ambos resueltos sin auto-intersecciones.}
 \label{fig:extremo_cruzado}
 \end{figure}
 
@@ -450,7 +546,16 @@ auto-intersección. El análisis geométrico indica que los
 contornos ET de BraTS son aproximadamente convexos y
 morfológicamente suaves: el promedio ponderado de dos
 contornos convexos alineados por longitud de arco tiende a
-producir un contorno simple. El módulo
+producir un contorno simple. Las tres mejoras de
+pre-alineación descritas en
+Sección~\ref{sec:resultados:mejoras} (normalización CCW,
+alineación por centroide y rotación óptima del punto de
+inicio) \emph{preservan} esta propiedad: ninguna introduce
+nuevas aristas ni modifica la topología del contorno
+interpolado, sólo reasignan correspondencias o aplican
+rigid transforms (traslación, inversión, rotación cíclica).
+En consecuencia, los 4 pares del experimento final
+mantuvieron la validez topológica. El módulo
 \texttt{SelfIntersectionResolver} está correctamente
 implementado (detección con Bentley--Ottmann, partición en
 sub-lazos y selección por área máxima) pero no se activa

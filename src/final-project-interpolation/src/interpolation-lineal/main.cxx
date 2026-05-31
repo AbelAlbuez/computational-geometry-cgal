@@ -12,7 +12,10 @@
 // =============================================================================
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -32,6 +35,21 @@ using TLinear    = pujCGAL::Final::LinearInterpolator;
 using TResolver  = pujCGAL::Final::SelfIntersectionResolver;
 using TContour   = TInterp::TContour;
 using TPoint     = TInterp::TPoint;
+
+// -----------------------------------------------------------------------------
+// Per-run output directory: src/interpolation-lineal/output/<YYYY-MM-DD_HH-MM-SS>/
+// -----------------------------------------------------------------------------
+static std::string make_output_dir( )
+{
+  auto now = std::chrono::system_clock::now( );
+  std::time_t t = std::chrono::system_clock::to_time_t( now );
+  char buf[ 32 ];
+  std::strftime( buf, sizeof( buf ), "%Y-%m-%d_%H-%M-%S", std::localtime( &t ) );
+  std::string dir =
+    std::string( "src/interpolation-lineal/output/" ) + buf;
+  std::filesystem::create_directories( dir );
+  return dir;
+}
 
 // -----------------------------------------------------------------------------
 // Helpers for pre-interpolation alignment.
@@ -154,8 +172,9 @@ int main( int argc, char** argv )
 
   const std::string fa = argv[ 1 ];
   const std::string fb = argv[ 2 ];
-  const std::string output_path =
-    ( argc >= 4 ) ? argv[ 3 ] : std::string( "output/contour_interpolated.obj" );
+  const std::string output_path = ( argc >= 4 )
+    ? std::string( argv[ 3 ] )
+    : ( make_output_dir( ) + "/contour_interpolated.obj" );
 
   auto A = TInterp::read_obj( fa );
   auto B = TInterp::read_obj( fb );

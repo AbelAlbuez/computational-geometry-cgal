@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BINARY = ROOT / "build" / "interpolation_lineal"
 CONTOURS = ROOT / "data" / "contours"
-OUTPUT = ROOT / "output"
+OUTPUT = ROOT / "src" / "interpolation-lineal" / "output"
 VIZ_SCRIPT = ROOT / "scripts" / "visualize_results.py"
 
 

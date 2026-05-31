@@ -34,3 +34,20 @@ add_executable(contour_interpolator src/main.cxx)
 target_link_libraries(contour_interpolator CGAL::CGAL)
 
 ## eof - CMakeLists.txt
+
+# -- pujCGAL header library (SegmentsIntersection, etc.)
+include_directories(${CMAKE_SOURCE_DIR}/../../lib)
+
+# pujCGAL/SegmentsIntersection.hxx uses std::iter_value_t (C++20).
+target_compile_features(contour_interpolator PRIVATE cxx_std_20)
+
+# -- Register new header-only modules with the existing target so IDEs and
+#    dependency tracking pick them up.
+target_sources(contour_interpolator PRIVATE
+  src/ContourResampler.h
+  src/ContourResampler.hxx
+  src/LinearInterpolator.h
+  src/LinearInterpolator.hxx
+  src/SelfIntersectionResolver.h
+  src/SelfIntersectionResolver.hxx
+)

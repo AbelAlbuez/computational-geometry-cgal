@@ -21,51 +21,47 @@ final-project-interpolation/
 ├── src/
 │   ├── main.cxx
 │   ├── ContourInterpolator.h
-│   └── ContourInterpolator.hxx
+│   ├── ContourInterpolator.hxx
+│   ├── ContourResampler.h
+│   ├── ContourResampler.hxx
+│   ├── LinearInterpolator.h
+│   ├── LinearInterpolator.hxx
+│   ├── SelfIntersectionResolver.h
+│   └── SelfIntersectionResolver.hxx
 └── output/
 ```
 
 ## Pipeline
 
-### 1. Extraer contornos desde BraTS (Python)
+1. **Resampling por longitud de arco** (`ContourResampler`) — iguala
+   `|A|` y `|B|` redistribuyendo `n` vértices uniformemente sobre los
+   segmentos del contorno cerrado.
+2. **Interpolación lineal** (`LinearInterpolator`) —
+   `P(t)[i] = (1-t)·A[i] + t·B[i]` para cada vértice `i`.
+3. **Construcción de segmentos CGAL** — el contorno interpolado se convierte
+   en un `std::vector<Segment_2>` conectando vértices consecutivos en
+   orden circular.
+4. **Detección de auto-intersecciones con Bentley-Ottmann**
+   (`SelfIntersectionResolver`) — usa
+   `pujCGAL::SegmentsIntersection::BentleyOttmann` para reportar todos los
+   puntos de cruce reales (excluyendo extremos compartidos entre aristas
+   consecutivas).
+5. **Resolución de cruces** — el contorno se subdivide en los puntos de
+   cruce y se extraen los sub-lazos mediante recorrido con pila; se
+   retiene el lazo con mayor área absoluta.
+6. **Escritura del contorno limpio** en `output/contour_interpolated.obj`
+   (formato 3D con `z = 0.0` para compatibilidad con visores como
+   ParaView, Online 3D Viewer e ImageToSTL).
 
-```bash
-cd src/final-project-interpolation
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/extract_contours.py
-```
+## Módulos implementados
 
-Este paso:
-- Copia los primeros 100 casos de `BraTS2024-BraTS-GLI-TrainingData.zip` (o
-  de la carpeta ya descomprimida) a `data/raw/`, conservando solo el
-  archivo de segmentación `*-seg.nii.gz`.
-- Para cada slice axial con label ET (=3) y al menos 10 píxeles, extrae el
-  contorno exterior más grande con `skimage.measure.find_contours` y lo
-  escribe como polilínea cerrada en `data/contours/<caso>/slice_XXXX.obj`.
-- Genera `data/contours/index.csv` con `case_id, slice_z, n_vertices, obj_path`.
+| Clase | Archivo | Responsabilidad |
+|---|---|---|
+| `ContourResampler` | `ContourResampler.h/.hxx` | Resampling por longitud de arco |
+| `LinearInterpolator` | `LinearInterpolator.h/.hxx` | Interpolación lineal vértice a vértice |
+| `SelfIntersectionResolver` | `SelfIntersectionResolver.h/.hxx` | Bentley-Ottmann + resolución de cruces |
 
-### 2. Compilar el módulo C++ / CGAL
-
-```bash
-mkdir build && cd build
-cmake ..
-make
-```
-
-### 3. Probar el stub con dos slices consecutivos
-
-```bash
-./contour_interpolator \
-  ../data/contours/BraTS-GLI-00000-000/slice_0070.obj \
-  ../data/contours/BraTS-GLI-00000-000/slice_0071.obj
-```
-
-Por ahora solo confirma que ambos contornos se cargaron y reporta
-`[TODO] Interpolacion pendiente`. La implementación geométrica vive en
-`ContourInterpolator.{h,hxx}`.
-
-## Formato `.obj` de los contornos
+## Formato `.obj` de los contornos de entrada
 
 ```
 # Contorno tumor ET - caso <id> - slice axial <z>
@@ -80,13 +76,37 @@ l 2 3
 l N 1
 ```
 
-Los contornos son 2D (sin componente `z`); las aristas se indexan en base 1
-y cierran el polígono con `l N 1`.
+Los contornos de entrada son 2D (sin componente `z`); las aristas se
+indexan en base 1 y cierran el polígono con `l N 1`.
+
+## Formato `.obj` de salida (interpolado)
+
+```
+# Contorno interpolado - 32 vertices
+v 63.0000 50.5000 0.0000
+v 62.3092 50.2268 0.0000
+...
+l 1 2
+l 2 3
+...
+l 32 1
+```
+
+Nota: los vértices de salida incluyen `z=0.0` para compatibilidad con
+visores 3D como ParaView, Online 3D Viewer e ImageToSTL.
 
 ## Kernel CGAL
 
 `CGAL::Exact_predicates_inexact_constructions_kernel` (suficiente para
 predicados robustos sin sacrificar velocidad en construcciones).
+
+## Requisitos
+
+- CGAL (`find_package(CGAL REQUIRED COMPONENTS Core)`)
+- **C++20** (`pujCGAL/SegmentsIntersection.hxx` usa `std::iter_value_t`).
+  El `CMakeLists.txt` ya incluye
+  `target_compile_features(contour_interpolator PRIVATE cxx_std_20)`.
+- Python 3 con `numpy`, `nibabel`, `scikit-image` (ver `requirements.txt`).
 
 ## Ejecución
 
@@ -122,7 +142,6 @@ Al finalizar verás:
 OK Casos procesados:   X/100
 OK Contornos exportados: Y archivos .obj
 OK Index guardado en:    data/contours/index.csv
-!! Casos sin ET:         Z
 ```
 
 ### 4. Compilar el módulo C++/CGAL
@@ -135,8 +154,19 @@ cmake .. && make
 ### 5. Ejecutar el interpolador con dos slices
 
 ```bash
-./contour_interpolator ../data/contours/BraTS-GLI-00000-000/slice_0070.obj \
-                       ../data/contours/BraTS-GLI-00000-000/slice_0071.obj
+./contour_interpolator ../data/contours/BraTS-GLI-00008-100/slice_0070.obj \
+                       ../data/contours/BraTS-GLI-00008-100/slice_0071.obj
+```
+
+Output esperado:
+
+```
+Contour A: 32 vertices
+Contour B: 30 vertices
+Resampled to: 32 vertices
+Interpolated contour: 32 vertices
+Self-intersections detected: no
+Result written to output/contour_interpolated.obj
 ```
 
 > **Nota:** las carpetas `venv/`, `data/` y `output/` están en `.gitignore`

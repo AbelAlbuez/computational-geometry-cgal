@@ -406,6 +406,75 @@ con visores estándar como ParaView, Online 3D Viewer e
 ImageToSTL.
 
 % =====================================================================
+\section{Decisiones de diseño y problemas resueltos}
+\label{sec:decisiones}
+% =====================================================================
+
+\subsection{Compatibilidad C++17 $\rightarrow$ C++20}
+\label{sec:decisiones:cxx20}
+Durante la compilación inicial el proyecto fallaba con el
+error \texttt{'iter\_value\_t' is not a member of 'std'}. La
+causa es que \texttt{pujCGAL/SegmentsIntersection.hxx} usa
+\texttt{std::iter\_value\_t}, disponible únicamente desde
+C++20. Para no modificar la librería del profesor se
+agregó al \texttt{CMakeLists.txt} del módulo:
+\begin{lstlisting}[caption={Activación de C++20 sólo para el
+target del módulo.}]
+target_compile_features(
+  contour_interpolator PRIVATE cxx_std_20
+);
+\end{lstlisting}
+Esto eleva el estándar exclusivamente para el ejecutable
+\texttt{contour\_interpolator} y resuelve la compilación sin
+tocar código externo.
+
+\subsection{Formato \texttt{.obj} 2D \emph{vs} 3D}
+\label{sec:decisiones:obj3d}
+La primera versión del exportador escribía vértices en 2D
+(\texttt{v x y}). Visores 3D como ParaView e ImageToSTL
+rechazaban el archivo con errores del tipo
+\emph{``Invalid vertex index''} o \emph{``Failed to import
+model''}. La solución fue introducir una función local
+\texttt{write\_obj\_3d} que agrega $z = 0{,}0$ a cada
+vértice, produciendo el formato estándar \texttt{v x y 0.0}
+compatible con cualquier visor 3D, sin necesidad de
+transformaciones posteriores.
+
+\subsection{Ausencia de auto-intersecciones en contornos
+            BraTS}
+\label{sec:decisiones:noselfint}
+Durante el desarrollo se ejecutó un barrido amplio de
+\textbf{94 pares} de slices (consecutivos, separados,
+extremos y cruzados entre casos), sin detectar ninguna
+auto-intersección. El análisis geométrico indica que los
+contornos ET de BraTS son aproximadamente convexos y
+morfológicamente suaves: el promedio ponderado de dos
+contornos convexos alineados por longitud de arco tiende a
+producir un contorno simple. El módulo
+\texttt{SelfIntersectionResolver} está correctamente
+implementado (detección con Bentley--Ottmann, partición en
+sub-lazos y selección por área máxima) pero no se activa
+con datos reales de BraTS. Para demostrar su funcionamiento
+de forma controlada se planea un experimento con
+correspondencia de vértices deliberadamente errónea
+(\emph{modo stress}: rotación del array $B$ o rotación
+geométrica previa), donde se garantiza la aparición de
+cruces.
+
+\subsection{Independencia del módulo respecto al equipo}
+\label{sec:decisiones:independencia}
+El módulo se diseñó para correr directamente sobre los
+\texttt{.obj} extraídos de BraTS, sin depender del output de
+los otros integrantes del equipo (Jesús: correspondencia de
+vértices por ángulo polar; Santiago: reconstrucción 3D con
+VTK). Esta decisión reduce el riesgo de integración y
+permite validar el componente de Abel en cualquier momento
+sin coordinación con el resto del equipo. La integración se
+realiza a posteriori a través del tipo común
+\texttt{TContour} y del formato \texttt{.obj}, ambos
+estables y bien definidos.
+
+% =====================================================================
 \section{Conclusiones Parciales}
 \label{sec:conclusiones}
 % =====================================================================

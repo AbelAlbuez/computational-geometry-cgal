@@ -10,9 +10,15 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{float}
 \usepackage{xcolor}
+\usepackage{colortbl}
 \usepackage{listings}
 \usepackage{cite}
 \usepackage{url}
+
+% ── Colores para celdas de tabla ─────────────────────────────────
+\definecolor{cellgood}{RGB}{212,237,218}
+\definecolor{cellmid}{RGB}{255,243,205}
+\definecolor{cellbad}{RGB}{248,215,218}
 
 % ── Estilo de listados de código ─────────────────────────────────
 \lstset{
@@ -443,6 +449,187 @@ vértices de contornos provenientes de casos distintos. La
 salida es un polígono simple sin auto-intersecciones, pero
 sin significado clínico: representa el promedio geométrico
 entre dos tumores no comparables.
+
+% =====================================================================
+\subsection{Métricas de calidad contra GT real}
+\label{sec:resultados:metricas}
+% =====================================================================
+Para cuantificar la calidad de la interpolación medí el
+contorno generado a $t=0.5$ contra el slice intermedio
+real extraído del mismo caso BraTS (\emph{ground truth}
+anatómico, no sintético). Calculé Dice e IoU rasterizando
+los polígonos sobre una grilla común de $512\times 512$
+dentro del \textit{bounding box} compartido, Hausdorff
+dirigido directamente sobre los vértices, y el error
+relativo de área. La Tabla~\ref{tab:metricas-gt} reporta
+los dos casos evaluados.
+
+\begin{table}[H]
+\centering
+\caption{Métricas del contorno interpolado a $t=0.5$
+contra GT real intermedio. Verde: Dice$\geq$0.80, IoU$\geq$0.65,
+Hausdorff$\leq$2.0, AreaErr$\leq$0.20. Amarillo: cerca del
+umbral. Rojo: fuera.}
+\label{tab:metricas-gt}
+\small
+\begin{tabular}{lcccc c}
+\toprule
+Caso & Dice & IoU & Hausdorff & AreaErr & Self-int \\
+\midrule
+00008-100 (70$\rightarrow$72) &
+  \cellcolor{cellgood}0.855 &
+  \cellcolor{cellgood}0.746 &
+  \cellcolor{cellgood}1.265 &
+  \cellcolor{cellgood}0.142 &
+  \cellcolor{cellgood}No \\
+00008-101 (70$\rightarrow$72) &
+  \cellcolor{cellgood}0.854 &
+  \cellcolor{cellgood}0.746 &
+  \cellcolor{cellgood}0.896 &
+  \cellcolor{cellgood}0.056 &
+  \cellcolor{cellgood}No \\
+\midrule
+\textbf{Promedio} &
+  \cellcolor{cellgood}\textbf{0.855} &
+  \cellcolor{cellgood}\textbf{0.746} &
+  \cellcolor{cellgood}\textbf{1.081} &
+  \cellcolor{cellgood}\textbf{0.099} &
+  --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Estos resultados deben leerse con cuidado al compararlos con
+los del integrante Santiago, quien reporta Dice$\approx$0.997.
+La diferencia no implica que un método sea superior al otro:
+las dos mediciones responden a preguntas distintas. Santiago
+evalúa la interpolación contra un GT sintético generado
+sobre el dataset completo, midiendo principalmente la
+fidelidad geométrica del proceso de reconstrucción
+intermedio; yo evalúo contra el slice real intermedio del
+mismo caso, midiendo cuán bien la interpolación lineal
+2D predice la \emph{forma anatómica observada} entre dos
+cortes vecinos. Ambas métricas son válidas y se
+complementan: la primera caracteriza el algoritmo en
+condiciones ideales; la segunda mide su utilidad clínica
+sobre datos reales con ruido de segmentación.
+
+% =====================================================================
+\subsection{Experimento de stress — robustez del pipeline}
+\label{sec:resultados:stress}
+% =====================================================================
+Los contornos de tumor activo (ET) de BraTS son
+empíricamente convexos o casi convexos en la mayoría de
+los slices, por lo que la interpolación lineal con
+\textbf{best\_rotation} no produce auto-intersecciones
+sobre los pares reales evaluados. Para forzar un escenario
+adversarial diseñé un experimento sintético: como contorno
+$A$ una estrella de 4 puntas con 8 vértices y radio
+exterior $R=50$, y como contorno $B$ un cuadrado de 8
+vértices (esquinas más puntos medios) ambos centrados en
+el mismo punto. Hice un barrido del radio interior
+$r$ de la estrella sobre $\{10, 5, 3, 1\}$ para acercarme
+a geometrías cada vez más degeneradas.
+
+Como control independiente, implementé en Python una
+verificación O($n^2$) por producto cruz que detecta cruces
+sobre la \emph{interpolación cruda vértice a vértice}, sin
+aplicar ninguna de las etapas de pre-alineación del
+binario. La Tabla~\ref{tab:stress} compara ambos resultados.
+
+\begin{table}[H]
+\centering
+\caption{Experimento de stress — cruces detectados por
+verificación cruda en Python vs.\ self-intersecciones
+reportadas por el binario completo.}
+\label{tab:stress}
+\small
+\begin{tabular}{ccc}
+\toprule
+$r$ & Cruces (Python, crudo) & Self-int (binario) \\
+\midrule
+10 & 0 & \cellcolor{cellgood}no \\
+5  & 4 & \cellcolor{cellgood}no \\
+3  & 4 & \cellcolor{cellgood}no \\
+1  & 4 & \cellcolor{cellgood}no \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El resultado es significativo: aún cuando el contorno
+crudo presenta 4 auto-intersecciones reales
+(geometría patológica con valles de profundidad $49/50$
+en el caso $r=1$), el pipeline completo del binario
+---normalización a CCW, alineación por centroide,
+\textit{resampling} por longitud de arco, y rotación
+óptima del punto de inicio--- reordena la correspondencia
+entre vértices antes de la interpolación de modo que el
+contorno resultante es siempre un polígono simple. En
+otras palabras, las mejoras geométricas descritas en la
+Sección~\ref{sec:resultados:mejoras} no son cosméticas:
+actúan como una primera línea de defensa que elimina los
+cruces \emph{antes de que el resolver basado en
+Bentley--Ottmann tenga ocasión de intervenir}. El
+\texttt{SelfIntersectionResolver} queda entonces como
+salvaguarda de última línea para los pocos casos
+patológicos que el pipeline no logra anticipar, antes
+que como componente activo en el flujo nominal.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{../src/interpolation-lineal/output/stress_test/2026-05-31_17-46-43/stress_comparison.png}
+\caption{Experimento de stress — estrella de 4 puntas
+($R=50$, $r=1$) vs.\ cuadrado de 8 vértices. Izquierda:
+entradas $A$ (azul) y $B$ (rojo). Derecha: interpolación
+producida por el binario (verde), polígono simple sin
+auto-intersecciones a pesar de que la interpolación
+vértice a vértice sin alinear produce 4 cruces.}
+\label{fig:stress}
+\end{figure}
+
+% =====================================================================
+\subsection{Salida para reconstrucción 3D}
+\label{sec:resultados:multi-t}
+% =====================================================================
+La salida nativa del binario es un archivo \texttt{.obj}
+con $z=0.0$ para todos los vértices, suficiente para
+verificación geométrica 2D pero insuficiente para que
+VTK o cualquier visor 3D apile los contornos en una
+reconstrucción volumétrica del tumor. Para cerrar el
+circuito con la etapa de visualización a cargo del
+integrante Santiago, escribí el script
+\texttt{generate\_multi\_t.py}, que dado un par de
+contornos $A,B$ y sus coordenadas $z_A,z_B$ ejecuta el
+binario para $t \in \{0.0, 0.1, \dots, 1.0\}$, reescribe
+cada archivo de salida sustituyendo $z=0.0$ por el valor
+interpolado $z(t) = (1-t)z_A + t z_B$, y genera además un
+\texttt{index.csv} (con $t$, $z$, número de vértices y
+estado self-int por cada slice) y una previsualización
+3D con \texttt{matplotlib}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\columnwidth]{../src/interpolation-lineal/output/multi_t/2026-05-31_16-48-38/preview_3d.png}
+\caption{Previsualización 3D de la salida de
+\texttt{generate\_multi\_t.py}: 11 contornos interpolados
+en $t \in [0,1]$ apilados con su $z(t)$ real, coloreados
+con \texttt{RdYlGn\_r}.}
+\label{fig:multi-t}
+\end{figure}
+
+Ejemplo de invocación:
+
+\begin{lstlisting}[language=bash,caption={Generación de
+una serie multi-$t$ con $z$ real para integración con VTK.}]
+python scripts/generate_multi_t.py \\
+    data/contour_70.obj data/contour_72.obj \\
+    70.0 72.0
+\end{lstlisting}
+
+El \texttt{index.csv} resultante permite a la etapa de
+visualización iterar los contornos en orden y filtrar por
+estado self-int sin tener que parsear los nombres de
+archivo, facilitando la integración con el pipeline VTK.
 
 \subsection{Limitación documentada}
 \label{sec:resultados:limitacion}

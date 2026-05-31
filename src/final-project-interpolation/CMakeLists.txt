@@ -51,3 +51,14 @@ target_sources(contour_interpolator PRIVATE
   src/interpolation-lineal/SelfIntersectionResolver.h
   src/interpolation-lineal/SelfIntersectionResolver.hxx
 )
+
+# -- Second executable that lives entirely inside src/interpolation-lineal/.
+add_executable(interpolation_lineal
+  src/interpolation-lineal/main.cxx
+)
+target_link_libraries(interpolation_lineal CGAL::CGAL)
+target_compile_features(interpolation_lineal PRIVATE cxx_std_20)
+target_include_directories(interpolation_lineal PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/../../lib
+)

@@ -151,7 +151,11 @@ namespace pujCGAL
           pts, kk, CGAL::parameters::point_map( PMap( ) ).normal_map( NMap( ) ) );
       auto un = CGAL::mst_orient_normals(
           pts, kk, CGAL::parameters::point_map( PMap( ) ).normal_map( NMap( ) ) );
-      pts.erase( un, pts.end( ) );
+      // A sparse stack of irregular rings often defeats MST orientation. Rather
+      // than discard the points it could not orient (which collapses the cloud
+      // and the mesh), fall back to the reliable in-plane outward seed normal.
+      for( auto it = un; it != pts.end( ); ++it )
+        std::get< 1 >( *it ) = std::get< 2 >( *it );
       if( pts.size( ) < 20 ) return false;
 
       // Repair: on the lateral surface (substantially horizontal normal) force

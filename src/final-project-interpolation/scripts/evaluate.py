@@ -117,8 +117,8 @@ def list_slices(contours: str):
     return [(stem_index(f), f) for f in files]
 
 
-def predict_pairwise(binp, method, fa, fb, out):
-    subprocess.run([binp, method, fa, fb, "0.5", out],
+def predict_pairwise(binp, method, fa, fb, out, t=0.5):
+    subprocess.run([binp, method, fa, fb, f"{t:.6f}", out],
                    check=True, capture_output=True)
 
 
@@ -150,6 +150,8 @@ def main() -> int:
     ap.add_argument("--contours", required=True, help="dir of slice_*.obj (one case)")
     ap.add_argument("--bin", required=True, help="path to contour_interpolator")
     ap.add_argument("--out", default="loo_out", help="output directory")
+    ap.add_argument("--max-gap", type=int, default=3,
+                    help="max z-gap (in slices) of a usable LOO triplet")
     args = ap.parse_args()
 
     slices = list_slices(args.contours)
@@ -159,8 +161,16 @@ def main() -> int:
     os.makedirs(args.out, exist_ok=True)
 
     rows = []                         # per (method, slice)
+    skipped = 0
     with tempfile.TemporaryDirectory() as tmp:
         for k in range(1, len(slices) - 1):
+            z0, z1, z2 = slices[k - 1][0], slices[k][0], slices[k + 1][0]
+            # Real data has z-gaps: only use triplets whose neighbours straddle
+            # the held-out slice within MAX_GAP, and set t from the true heights.
+            if z2 - z0 <= 0 or z2 - z0 > args.max_gap or not (z0 < z1 < z2):
+                skipped += 1
+                continue
+            t = (z1 - z0) / (z2 - z0)
             zk, true_f = slices[k]
             true = read_obj(true_f)
             if true.shape[0] < 3:
@@ -170,7 +180,7 @@ def main() -> int:
                 try:
                     if method in ("linear", "sdf"):
                         pred_f = os.path.join(tmp, f"{method}_{k}.obj")
-                        predict_pairwise(args.bin, method, fa, fb, pred_f)
+                        predict_pairwise(args.bin, method, fa, fb, pred_f, t)
                     else:
                         od = os.path.join(tmp, f"spline_{k}")
                         pred_f = predict_spline(args.bin, slices, k, od)
@@ -209,6 +219,15 @@ def main() -> int:
         for a in agg:
             w.writerow(a)
 
+    # raw per-slice rows (so several cases can be aggregated downstream)
+    raw_path = os.path.join(args.out, "results_raw.csv")
+    with open(raw_path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["method", "slice", "dice", "iou",
+                                          "hausdorff", "mean_dist", "rel_area_err"])
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+
     # comparison plots
     if agg:
         labels = [a["method"] for a in agg]
@@ -221,7 +240,8 @@ def main() -> int:
         fig.savefig(os.path.join(args.out, "comparison.png"), dpi=120)
 
     # console table
-    print("\n=== Leave-one-slice-out comparison (mean over slices) ===")
+    print(f"\n=== Leave-one-slice-out comparison (mean over slices; "
+          f"{skipped} triplets skipped for z-gap > {args.max_gap}) ===")
     print(f"{'method':<8} {'n':>4} {'Dice':>7} {'IoU':>7} {'Hausd':>8} {'meanD':>7} {'areaErr':>8}")
     for a in agg:
         print(f"{a['method']:<8} {a['n']:>4} {a['dice']:>7.3f} {a['iou']:>7.3f} "

@@ -26,11 +26,40 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 # -- Packages
 find_package(CGAL REQUIRED COMPONENTS Core)
 
+# Eigen is required by the Poisson reconstruction + jet_estimate_normals
+# (Stage 4 only). It is header-only and may be vendored without sudo; pass
+# -DEIGEN3_INCLUDE_DIR=/path/to/eigen3 to cmake (see scripts/setup_eigen.sh).
+find_package(Eigen3 3.3 REQUIRED)
+include(CGAL_Eigen3_support)   # defines the CGAL::Eigen3_support imported target
+
 # -- Include path so #include "ContourInterpolator.h" resolves
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-# -- Executable
+# -- Executable (main pulls in the Reconstructor -> needs Eigen)
 add_executable(contour_interpolator src/main.cxx)
-target_link_libraries(contour_interpolator CGAL::CGAL)
+target_link_libraries(contour_interpolator CGAL::CGAL CGAL::Eigen3_support)
+
+# -- Tests
+enable_testing()
+
+add_executable(test_linear src/test_linear.cxx)
+target_link_libraries(test_linear CGAL::CGAL)
+add_test(NAME linear_circle COMMAND test_linear)
+
+add_executable(test_series src/test_series.cxx)
+target_link_libraries(test_series CGAL::CGAL)
+add_test(NAME series_spline_vs_poly COMMAND test_series)
+
+add_executable(test_sdf src/test_sdf.cxx)
+target_link_libraries(test_sdf CGAL::CGAL)
+add_test(NAME sdf_circle_and_topology COMMAND test_sdf)
+
+add_executable(test_reconstruct src/test_reconstruct.cxx)
+target_link_libraries(test_reconstruct CGAL::CGAL CGAL::Eigen3_support)
+add_test(NAME reconstruct_ellipsoid COMMAND test_reconstruct)
+
+add_executable(test_metrics src/test_metrics.cxx)
+target_link_libraries(test_metrics CGAL::CGAL CGAL::Eigen3_support)
+add_test(NAME metrics_ellipsoid COMMAND test_metrics)
 
 ## eof - CMakeLists.txt

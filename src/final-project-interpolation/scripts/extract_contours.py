@@ -14,7 +14,9 @@
 # =============================================================================
 from __future__ import annotations
 
+import argparse
 import csv
+import os
 import shutil
 import sys
 import zipfile
@@ -31,7 +33,7 @@ from tqdm import tqdm
 
 ET_LABEL          = 3
 MIN_PIXELS        = 10
-N_CASES           = 100
+N_CASES           = 100               # default; override with --cases
 CASE_PREFIX       = "BraTS-GLI-"
 SEG_SUFFIX        = "-seg.nii.gz"
 
@@ -40,10 +42,12 @@ RAW_DIR           = PROJECT_ROOT / "data" / "raw"
 CONTOURS_DIR      = PROJECT_ROOT / "data" / "contours"
 INDEX_CSV         = CONTOURS_DIR / "index.csv"
 
-DATASET_DIR       = Path(
-    "/Users/abelalbuez/Documents/Maestria/Tercer Semestre/Tesis datasets"
-)
-DATASET_ZIP       = DATASET_DIR / "BraTS2024-BraTS-GLI-TrainingData.zip"
+# Dataset location is resolved at runtime from --dataset or $BRATS_DIR (no
+# hard-coded path). It may be either a folder containing the extracted
+# "BraTS2024-BraTS-GLI-TrainingData/" tree or a folder holding the zip.
+DEFAULT_DATASET   = os.environ.get("BRATS_DIR", "")
+DATASET_ZIP_NAME  = "BraTS2024-BraTS-GLI-TrainingData.zip"
+EXTRACTED_NAME    = "BraTS2024-BraTS-GLI-TrainingData"
 
 
 # -----------------------------------------------------------------------------
@@ -104,15 +108,22 @@ def extract_case_from_zip(zf: zipfile.ZipFile, case_id: str,
     return True
 
 
-def stage_raw_cases() -> list[Path]:
-    """Populate data/raw/ with the first N_CASES segmentation files."""
+def stage_raw_cases(dataset_dir: Path, n_cases: int) -> list[Path]:
+    """Populate data/raw/ with the first n_cases segmentation files.
+
+    `dataset_dir` may directly be the extracted "...TrainingData/" tree, a
+    parent that contains it, or a folder holding the dataset zip.
+    """
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-    extracted_root = DATASET_DIR / "BraTS2024-BraTS-GLI-TrainingData"
-    on_disk = list_cases_extracted(extracted_root)
+    # Accept either the extracted tree itself or a parent containing it.
+    candidates = [dataset_dir, dataset_dir / EXTRACTED_NAME]
+    extracted_root = next((c for c in candidates if list_cases_extracted(c)), None)
+    zip_path = dataset_dir / DATASET_ZIP_NAME
 
-    if on_disk:
-        cases = on_disk[:N_CASES]
+    if extracted_root is not None:
+        on_disk = list_cases_extracted(extracted_root)
+        cases = on_disk[:n_cases]
         print(f"Found {len(on_disk)} extracted cases — staging first "
               f"{len(cases)} from {extracted_root}")
         for case_id in tqdm(cases, desc="copying"):
@@ -124,13 +135,17 @@ def stage_raw_cases() -> list[Path]:
                 tqdm.write(f"  skip (no seg): {case_id}")
         return [RAW_DIR / c for c in cases]
 
-    if not DATASET_ZIP.exists():
-        sys.exit(f"BraTS source not found. Looked for:\n"
-                 f"  {extracted_root}\n  {DATASET_ZIP}")
+    if not zip_path.exists():
+        sys.exit(
+            "BraTS source not found. Set --dataset or $BRATS_DIR to a folder "
+            "containing either:\n"
+            f"  - the extracted '{EXTRACTED_NAME}/' tree, or\n"
+            f"  - '{DATASET_ZIP_NAME}'.\n"
+            f"Looked under: {dataset_dir}")
 
-    cases = list_cases_in_zip(DATASET_ZIP)[:N_CASES]
-    print(f"Staging {len(cases)} cases from zip {DATASET_ZIP.name}")
-    with zipfile.ZipFile(DATASET_ZIP) as zf:
+    cases = list_cases_in_zip(zip_path)[:n_cases]
+    print(f"Staging {len(cases)} cases from zip {zip_path.name}")
+    with zipfile.ZipFile(zip_path) as zf:
         for case_id in tqdm(cases, desc="extracting"):
             dst = RAW_DIR / case_id
             seg_dst = dst / f"{case_id}{SEG_SUFFIX}"
@@ -167,8 +182,17 @@ def extract_case_contours(case_dir: Path) -> tuple[int, list[dict]]:
     if not seg_path.exists():
         return 0, []
 
-    seg = nib.load(str(seg_path)).get_fdata().astype(np.int16)
+    img = nib.load(str(seg_path))
+    seg = img.get_fdata().astype(np.int16)
     out_dir = CONTOURS_DIR / case_id
+
+    # Physical voxel spacing in mm from the NIfTI header (never hard-coded).
+    # zooms = (axis0, axis1, axis2). We write (x, y) = (axis1, axis0), so the
+    # in-plane spacing along the .obj x is zooms[1] and along y is zooms[0];
+    # the through-plane (slice) spacing is zooms[2]. BraTS GLI is 1 mm
+    # isotropic, but anisotropic data is handled correctly here.
+    zooms = [float(z) for z in img.header.get_zooms()[:3]]
+    sx, sy, dz = zooms[1], zooms[0], zooms[2]
 
     rows: list[dict] = []
     n_with_et = 0
@@ -198,6 +222,9 @@ def extract_case_contours(case_dir: Path) -> tuple[int, list[dict]]:
         if contour_xy.shape[0] < 3:
             continue
 
+        # Scale pixel-index coordinates to physical millimetres.
+        contour_xy = contour_xy * np.array([sx, sy], dtype=float)
+
         obj_path = out_dir / f"slice_{z:04d}.obj"
         write_contour_obj(obj_path, contour_xy, case_id, z)
 
@@ -206,6 +233,9 @@ def extract_case_contours(case_dir: Path) -> tuple[int, list[dict]]:
             "slice_z": z,
             "n_vertices": contour_xy.shape[0],
             "obj_path": str(obj_path.relative_to(PROJECT_ROOT)),
+            "dx_mm": f"{sx:.6f}",
+            "dy_mm": f"{sy:.6f}",
+            "dz_mm": f"{dz:.6f}",
         })
 
     return n_with_et, rows
@@ -215,8 +245,26 @@ def extract_case_contours(case_dir: Path) -> tuple[int, list[dict]]:
 # Driver
 # -----------------------------------------------------------------------------
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="Extract 2D ET contours from BraTS 2024 GLI segmentations.")
+    p.add_argument("--dataset", default=DEFAULT_DATASET,
+                   help="Folder with the extracted 'BraTS2024-BraTS-GLI-"
+                        "TrainingData/' tree or the dataset zip. "
+                        "Defaults to $BRATS_DIR.")
+    p.add_argument("--cases", type=int, default=N_CASES,
+                   help=f"Number of cases to process (default {N_CASES}).")
+    return p.parse_args()
+
+
 def main() -> int:
-    case_dirs = stage_raw_cases()
+    args = parse_args()
+    if not args.dataset:
+        sys.exit("No dataset given. Pass --dataset /path/to/BraTS or set "
+                 "the BRATS_DIR environment variable.")
+    dataset_dir = Path(args.dataset).expanduser()
+
+    case_dirs = stage_raw_cases(dataset_dir, args.cases)
     CONTOURS_DIR.mkdir(parents=True, exist_ok=True)
 
     all_rows: list[dict] = []
@@ -233,14 +281,15 @@ def main() -> int:
 
     with open(INDEX_CSV, "w", newline="") as f:
         writer = csv.DictWriter(
-            f, fieldnames=["case_id", "slice_z", "n_vertices", "obj_path"]
+            f, fieldnames=["case_id", "slice_z", "n_vertices", "obj_path",
+                           "dx_mm", "dy_mm", "dz_mm"]
         )
         writer.writeheader()
         writer.writerows(all_rows)
 
     total_processed = cases_with_et + cases_without_et
     print()
-    print(f"OK Casos procesados:   {total_processed}/{N_CASES}")
+    print(f"OK Casos procesados:     {total_processed}/{args.cases}")
     print(f"OK Contornos exportados: {len(all_rows)} archivos .obj")
     print(f"OK Index guardado en:    {INDEX_CSV.relative_to(PROJECT_ROOT)}")
     print(f"!! Casos sin ET:         {cases_without_et}")

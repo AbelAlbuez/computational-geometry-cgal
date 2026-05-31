@@ -15,7 +15,9 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
+import glob
 import os
+import shutil
 import statistics as st
 import subprocess
 import sys
@@ -96,6 +98,10 @@ def main() -> int:
         sys.exit("Set --dataset or $BRATS_DIR")
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     ds = Path(args.dataset)
+
+    # Clean stale per-run artefacts so a smaller rerun does not leave old cases.
+    for p in glob.glob(str(out / "mesh_*")) + glob.glob(str(out / "loo_*")):
+        shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
 
     print(f"== extracting {args.extract} cases ==")
     run([sys.executable, str(HERE / "extract_contours.py"),

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # =============================================================================
-# Build ONE interactive HTML dashboard from a results folder:
-#   - per visualisation case, a row of rotatable 3D surfaces:
-#       ground truth (marching cubes) | linear | spline | sdf
-#   - the leave-one-slice-out stats table (mean / median / %Dice>0.8)
-#   - the reconstruction-vs-ground-truth volume table
+# Build ONE interactive HTML dashboard with a CASE SELECTOR (dropdown):
+#   - pick a tumor from the dropdown; only that case is shown.
+#   - per case: rotatable 3D surfaces  ground truth | linear | spline | sdf
+#     plus a metrics table (LOO accuracy + reconstruction volume vs ground truth).
 # Self-contained (plotly.js embedded); open in any browser.
 #
 #   python3 build_dashboard.py --results data/results --out dashboard.html
@@ -44,13 +43,58 @@ def read_off(path):
     return verts, np.asarray(faces, dtype=int)
 
 
-def table_html(rows, headers, title):
-    th = "".join(f"<th>{h}</th>" for h in headers)
-    trs = ""
-    for r in rows:
-        trs += "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>"
-    return (f"<h3>{title}</h3><table>"
-            f"<thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table>")
+def load_loo(res, case):
+    """per-method LOO row (means for this case) from loo_<case>/results.csv."""
+    p = res / f"loo_{case}" / "results.csv"
+    out = {}
+    if p.exists():
+        for r in csv.DictReader(open(p)):
+            out[r["method"]] = r
+    return out
+
+
+def load_recon(res):
+    out = {}
+    p = res / "reconstruction_summary.csv"
+    if p.exists():
+        for r in csv.DictReader(open(p)):
+            out[(r["case"], r["method"])] = r
+    return out
+
+
+def case_table(case, loo, recon):
+    methods = ["linear", "spline", "sdf"]
+    def vol(m):
+        r = recon.get((case, m), {})
+        return r.get("mesh_volume_mm3", "").replace(" mm^3", "").strip()
+    gt = ""
+    for m in methods:
+        r = recon.get((case, m), {})
+        if r.get("voxel_gt_volume_mm3"):
+            gt = r["voxel_gt_volume_mm3"].strip(); break
+    def f(m, k, nd=3):
+        try:
+            return f"{float(loo.get(m, {}).get(k, '')):.{nd}f}"
+        except Exception:
+            return "—"
+    def ratio(m):
+        try:
+            return f"{float(vol(m)) / float(gt):.2f}"
+        except Exception:
+            return "—"
+    header = ["method", "Dice", "IoU", "Hausdorff (mm)", "area err",
+              "mesh vol (mm³)", "GT vol (mm³)", "ratio"]
+    cols = [
+        methods,
+        [f(m, "dice") for m in methods],
+        [f(m, "iou") for m in methods],
+        [f(m, "hausdorff", 2) for m in methods],
+        [f(m, "rel_area_err") for m in methods],
+        [vol(m) or "—" for m in methods],
+        [gt or "—"] * 3,
+        [ratio(m) for m in methods],
+    ]
+    return header, cols
 
 
 def main() -> int:
@@ -65,16 +109,22 @@ def main() -> int:
     if not cases:
         cases = sorted({os.path.basename(p).split("_")[1]
                         for p in glob.glob(str(res / "mesh_*_linear.off"))})
+    if not cases:
+        print("no meshes found in", res); return 1
     print("dashboard cases:", cases)
+    recon = load_recon(res)
 
-    nrows = max(1, len(cases))
-    titles = [f"{c} — {COL_TITLE[m]}" for c in cases for m in COLS]
-    fig = make_subplots(rows=nrows, cols=4,
-                        specs=[[{"type": "scene"}] * 4 for _ in range(nrows)],
-                        subplot_titles=titles, horizontal_spacing=0.01,
-                        vertical_spacing=0.04)
-    for ri, case in enumerate(cases, start=1):
-        for ci, m in enumerate(COLS, start=1):
+    fig = make_subplots(
+        rows=2, cols=4,
+        specs=[[{"type": "scene"}] * 4,
+               [{"type": "table", "colspan": 4}, None, None, None]],
+        row_heights=[0.74, 0.26], vertical_spacing=0.06,
+        horizontal_spacing=0.005,
+        subplot_titles=[COL_TITLE[m] for m in COLS] + [""])
+
+    trace_case = []          # case index that each trace belongs to
+    for ci, case in enumerate(cases):
+        for col, m in enumerate(COLS, start=1):
             off = res / f"mesh_{case}_{m}.off"
             if not off.exists():
                 continue
@@ -86,63 +136,44 @@ def main() -> int:
                 i=f[:, 0], j=f[:, 1], k=f[:, 2],
                 color=COL_COLOR[m], opacity=1.0,
                 lighting=dict(ambient=0.5, diffuse=0.85),
-                showscale=False, hoverinfo="skip"),
-                row=ri, col=ci)
+                showscale=False, hoverinfo="skip",
+                visible=(ci == 0)), row=1, col=col)
+            trace_case.append(ci)
+        header, cols = case_table(case, load_loo(res, case), recon)
+        fig.add_trace(go.Table(
+            header=dict(values=header, fill_color="#e8e8e8",
+                        align="left", font=dict(size=12)),
+            cells=dict(values=cols, align="left", font=dict(size=12),
+                       height=24), visible=(ci == 0)), row=2, col=1)
+        trace_case.append(ci)
+
+    ntr = len(trace_case)
+    buttons = []
+    for ci, case in enumerate(cases):
+        vis = [trace_case[t] == ci for t in range(ntr)]
+        buttons.append(dict(label=case, method="update",
+                            args=[{"visible": vis},
+                                  {"title.text": f"Tumor {case}  —  ground truth vs "
+                                                 f"linear / spline / SDF"}]))
+
     fig.update_scenes(aspectmode="data", xaxis_visible=False,
                       yaxis_visible=False, zaxis_visible=False)
-    fig.update_layout(height=330 * nrows, margin=dict(l=0, r=0, t=40, b=0),
-                      title_text="BraTS tumor reconstruction — ground truth vs "
-                                 "linear / spline / SDF interpolation")
-    plot_div = fig.to_html(full_html=False, include_plotlyjs=True)
+    fig.update_layout(
+        height=860, margin=dict(l=0, r=0, t=110, b=0),
+        title=dict(text=f"Tumor {cases[0]}  —  ground truth vs linear / spline / SDF",
+                   x=0.5, xanchor="center", y=0.99),
+        updatemenus=[dict(
+            buttons=buttons, direction="down", showactive=True,
+            x=0.5, xanchor="center", y=1.10, yanchor="top",
+            pad=dict(t=4, b=4), bgcolor="#f4f4f4")],
+        annotations=list(fig.layout.annotations) + [dict(
+            text="Select tumor:", x=0.5, xanchor="right", y=1.135,
+            yref="paper", xref="paper", showarrow=False,
+            font=dict(size=13), xshift=-120)])
 
-    # tables
-    tables = ""
-    agg = res / "loo_aggregate.csv"
-    if agg.exists():
-        rd = list(csv.DictReader(open(agg)))
-        headers = ["method", "n", "Dice mean", "Dice median", "% Dice>0.8",
-                   "IoU mean", "Hausdorff mean (mm)", "area-err median"]
-        rows = [[r["method"], r["n"], f"{float(r['dice_mean']):.3f}",
-                 f"{float(r['dice_median']):.3f}", f"{float(r['dice_pct_gt80']):.1f}%",
-                 f"{float(r['iou_mean']):.3f}", f"{float(r['hausdorff_mean']):.2f}",
-                 f"{float(r['area_err_median']):.3f}"] for r in rd]
-        tables += table_html(rows, headers,
-                             "Leave-one-slice-out accuracy (held-out real slices)")
-    rec = res / "reconstruction_summary.csv"
-    if rec.exists():
-        rd = list(csv.DictReader(open(rec)))
-        headers = ["case", "method", "status", "mesh vol (mm³)", "voxel GT (mm³)", "ratio"]
-        rows = []
-        for r in rd:
-            mv = r["mesh_volume_mm3"].replace(" mm^3", "").strip()
-            gt = r["voxel_gt_volume_mm3"].strip()
-            try:
-                ratio = f"{float(mv) / float(gt):.2f}"
-            except Exception:
-                ratio = "—"
-            rows.append([r["case"], r["method"], r.get("status", ""), mv or "—", gt, ratio])
-        tables += table_html(rows, headers, "Reconstruction volume vs voxel ground truth")
-
-    style = """<style>
-      body{font-family:system-ui,Arial,sans-serif;margin:18px;color:#222}
-      h1{font-size:20px} h3{margin-top:26px}
-      table{border-collapse:collapse;margin:8px 0 20px}
-      th,td{border:1px solid #ccc;padding:4px 10px;text-align:right;font-size:13px}
-      th{background:#f0f0f0} td:first-child,th:first-child{text-align:left}
-      .note{color:#555;font-size:13px;max-width:900px}
-    </style>"""
-    note = ("<p class='note'>Each 3D panel is interactive: drag to rotate, scroll "
-            "to zoom. Ground truth is a marching-cubes surface of the segmented "
-            "voxels; the others are Poisson reconstructions of the interpolated "
-            "contour stack. Dice/IoU are region overlap (higher better); Hausdorff "
-            "and area error are lower-better. Median &gt;&gt; mean because a few "
-            "hard slices (tiny or splitting tumor) score near zero.</p>")
-    page = (f"<!doctype html><html><head><meta charset='utf-8'>"
-            f"<title>BraTS interpolation dashboard</title>{style}</head><body>"
-            f"<h1>BraTS glioma — interpolation &amp; reconstruction dashboard</h1>"
-            f"{note}{plot_div}{tables}</body></html>")
-    Path(args.out).write_text(page, encoding="utf-8")
-    print(f"wrote {args.out}  ({len(cases)} cases)")
+    fig.write_html(args.out, include_plotlyjs=True, full_html=True)
+    size = os.path.getsize(args.out) / 1e6
+    print(f"wrote {args.out}  ({len(cases)} cases, {size:.1f} MB)")
     return 0
 
 

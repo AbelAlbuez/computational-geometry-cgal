@@ -75,6 +75,12 @@ venv/
 src/final-project-interpolation/data/
 src/final-project-interpolation/output/
 
+# LaTeX auxiliares
+src/final-project-interpolation/latex/informe.aux
+src/final-project-interpolation/latex/informe.log
+src/final-project-interpolation/latex/informe.out
+src/final-project-interpolation/latex/informe.tex.bak
+
 # macOS
 .DS_Store
 

@@ -22,12 +22,13 @@ import numpy as np
 from matplotlib.path import Path as MplPath
 from scipy.spatial.distance import directed_hausdorff
 import plotly.graph_objects as go
+from plotly.offline import get_plotlyjs
 
 
 ROOT     = Path(__file__).resolve().parent.parent
 BINARY   = ROOT / "build" / "interpolation_lineal"
 CONTOURS = ROOT / "data" / "contours"
-OUT_HTML = ROOT / "src" / "interpolation-lineal" / "dashboard_lineal.html"
+OUT_HTML = ROOT / "src" / "interpolation-lineal" / "output" / "dashboard_lineal.html"
 
 T_STEPS  = [round(i / 10.0, 1) for i in range(11)]      # 0.0 .. 1.0
 T_INDEX_HALF = 5                                         # t=0.5 → metrics
@@ -274,6 +275,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   .summary { background: #fff; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; max-width: 980px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>__PLOTLY_BUNDLE__</script>
 </head>
 <body>
 
@@ -656,7 +658,7 @@ def main():
     fig3d         = build_3d_figure(results)
     section4_html = fig3d.to_html(
         full_html=False,
-        include_plotlyjs=True,
+        include_plotlyjs=False,
         div_id="plotly-3d-main",
         config={"responsive": True, "displaylogo": False},
     )
@@ -665,9 +667,11 @@ def main():
         + section4_html
         + '</div>'
     )
+    html = html.replace("__PLOTLY_BUNDLE__", get_plotlyjs())
     html = html.replace("__SECTION4_HTML__", section4_html)
 
     html = html.replace("__STRESS_SECTION__", build_stress_section())
+    OUT_HTML.parent.mkdir(parents=True, exist_ok=True)
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"\nDashboard escrito en {OUT_HTML.relative_to(ROOT)}")
 

@@ -62,3 +62,5 @@ target_include_directories(interpolation_lineal PRIVATE
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/../../lib
 )
+# -- Ejecutable independiente para la Inteligencia Artificial (Jesús)
+add_executable(interpolador_ia src/main_ia.cxx)

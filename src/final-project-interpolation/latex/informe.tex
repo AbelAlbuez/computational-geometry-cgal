@@ -766,6 +766,50 @@ realiza a posteriori a través del tipo común
 \texttt{TContour} y del formato \texttt{.obj}, ambos
 estables y bien definidos.
 
+\subsection{Dashboard de validación — visualización autónoma}
+\label{sec:decisiones:dashboard}
+
+La validación visual del módulo se documenta en un dashboard HTML
+autónomo (\texttt{dashboard\_lineal.html}) generado por el script
+\texttt{scripts/generate\_dashboard.py}. Durante su desarrollo se
+enfrentaron dos problemas técnicos relevantes.
+
+\textbf{Problema 1: imágenes con rutas relativas rotas.}
+La imagen del experimento de stress se referenciaba mediante una ruta
+relativa al disco, lo que impedía visualizarla al mover el archivo.
+La solución fue embeber el PNG directamente en el HTML como cadena
+base64 (\texttt{data:image/png;base64,...}), siguiendo el mismo
+patrón del \texttt{report.html} de referencia. El archivo resultante
+es completamente autónomo y no depende de ninguna ruta local.
+
+\textbf{Problema 2: figuras Plotly en blanco por conflicto CSS.}
+Al embeber las figuras con
+\texttt{fig.to\_html(full\_html=False, include\_plotlyjs=False)},
+los gráficos aparecían en blanco. La causa raíz fue una regla CSS
+global heredada del visualizador SVG anterior:
+
+\begin{verbatim}
+svg { width: 100%; height: 420px; background: #fff; }
+\end{verbatim}
+
+Esta regla sobreescribía los elementos \texttt{<svg>} internos de
+Plotly, colapsando su altura y dejando el área de dibujo vacía. La
+sección 3D no se veía afectada porque usa WebGL/canvas en lugar de
+SVG. Una vez eliminada la regla, \texttt{fig.to\_html} renderizaba
+correctamente.
+
+No obstante, se decidió migrar el visualizador de contornos a
+\texttt{matplotlib} con imágenes PNG base64 como medida de
+robustez: elimina cualquier dependencia de runtime JS, garantiza
+que el HTML sea autónomo, y simplifica el debugging futuro.
+
+\textbf{Lección:} al mezclar SVG nativo con Plotly en un mismo
+documento HTML, las reglas CSS globales que afecten al selector
+\texttt{svg} interfieren con el render interno de Plotly. Siempre
+aislar esas reglas con selectores más específicos
+(e.g.\ \texttt{.contorno-svg}) o usar \texttt{svg.mi-clase}
+en lugar de \texttt{svg} a secas.
+
 % =====================================================================
 \section{Conclusiones Parciales}
 \label{sec:conclusiones}

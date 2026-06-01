@@ -665,7 +665,10 @@ def main():
         div_id="plotly-3d-main",
         config={"responsive": True, "displaylogo": False},
     )
-    html = html.replace("__SECTION4_HTML__", section4_html)
+    # NOTE: count=1 — the literal "__SECTION4_HTML__" also appears inside a
+    # JS comment in the template; without the limit, str.replace would inject
+    # the entire ~4.9 MB section4_html (bundle + div + init) twice.
+    html = html.replace("__SECTION4_HTML__", section4_html, 1)
 
     html = html.replace("__STRESS_SECTION__", build_stress_section())
     OUT_HTML.write_text(html, encoding="utf-8")

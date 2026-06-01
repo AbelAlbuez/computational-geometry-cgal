@@ -22,7 +22,6 @@ import numpy as np
 from matplotlib.path import Path as MplPath
 from scipy.spatial.distance import directed_hausdorff
 import plotly.graph_objects as go
-from plotly.offline import get_plotlyjs
 
 
 ROOT     = Path(__file__).resolve().parent.parent
@@ -275,7 +274,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   .summary { background: #fff; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; max-width: 980px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>__PLOTLY_BUNDLE__</script>
+<script src="plotly.min.js"></script>
 </head>
 <body>
 
@@ -667,7 +666,6 @@ def main():
         + section4_html
         + '</div>'
     )
-    html = html.replace("__PLOTLY_BUNDLE__", get_plotlyjs())
     html = html.replace("__SECTION4_HTML__", section4_html)
 
     html = html.replace("__STRESS_SECTION__", build_stress_section())

@@ -660,6 +660,11 @@ def main():
         div_id="plotly-3d-main",
         config={"responsive": True, "displaylogo": False},
     )
+    section4_html = (
+        '<div style="width:100%;min-height:520px;display:block;">'
+        + section4_html
+        + '</div>'
+    )
     html = html.replace("__SECTION4_HTML__", section4_html)
 
     html = html.replace("__STRESS_SECTION__", build_stress_section())

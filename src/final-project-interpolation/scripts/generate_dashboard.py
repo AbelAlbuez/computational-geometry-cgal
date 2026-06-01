@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib.path import Path as MplPath
 from scipy.spatial.distance import directed_hausdorff
+from plotly.offline import get_plotlyjs
 
 
 ROOT     = Path(__file__).resolve().parent.parent
@@ -273,7 +274,8 @@ HTML_TEMPLATE = r"""<!doctype html>
   .summary { background: #fff; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; max-width: 980px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
+<script>__PLOTLY_BUNDLE__</script>
 </head>
 <body>
 
@@ -706,6 +708,9 @@ def main():
         json.dumps(plotly3d, ensure_ascii=False, separators=(",", ":")),
     )
     html    = html.replace("__STRESS_SECTION__", build_stress_section())
+    # Inline plotly.js bundle (matches Santiago's strategy: no CDN dependency,
+    # works offline / file:// without network access).
+    html    = html.replace("__PLOTLY_BUNDLE__", get_plotlyjs())
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"\nDashboard escrito en {OUT_HTML.relative_to(ROOT)}")
 

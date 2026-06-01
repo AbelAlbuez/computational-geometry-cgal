@@ -11,18 +11,18 @@ reconstruct a closed 3D surface → compute metrics. Interpolation accuracy is m
 **leave-one-slice-out (LOO)**: hide a real slice, predict it from its neighbours, and
 compare to the held-out truth.
 
-- **Cases evaluated (LOO):** 10 (those with the most ET slices among the first 40).
-- **Held-out slices:** 420 per method (gap-corrected: `t` from the true slice heights;
+- **Cases evaluated (LOO):** 50 (the most-ET cases among the first 120 extracted).
+- **Held-out slices:** 2 240 per method (gap-corrected: `t` from the true slice heights;
   triplets with a z-gap > 3 skipped).
-- **3D reconstruction + ground truth:** 3 representative cases.
+- **3D reconstruction + ground truth:** 8 cases, selectable in the interactive dashboard.
 
-## 1. Interpolation accuracy (leave-one-slice-out, 10 cases)
+## 1. Interpolation accuracy (leave-one-slice-out, 50 cases)
 
 | method | Dice mean | **Dice median** | **% slices Dice > 0.8** | IoU mean | Hausdorff mean / median (mm) | area-err median |
 |---|---|---|---|---|---|---|
-| **linear** | 0.856 | **0.935** | **80.2 %** | 0.785 | 4.42 / 2.41 | 0.033 |
-| **sdf**    | 0.843 | **0.937** | 78.3 %  | 0.774 | 4.74 / 2.38 | 0.030 |
-| spline     | 0.821 | 0.912 | 71.7 %  | 0.742 | 4.93 / 2.70 | 0.048 |
+| **linear** | 0.842 | 0.916 | **77.1 %** | 0.765 | 4.96 / 2.98 | 0.039 |
+| **sdf**    | 0.829 | **0.926** | 75.7 %  | 0.756 | 5.84 / 3.07 | 0.035 |
+| spline     | 0.811 | 0.894 | 69.9 %  | 0.726 | 5.32 / 3.43 | 0.047 |
 
 ![LOO comparison](assets/img/loo_aggregate.png)
 
@@ -44,29 +44,32 @@ Mesh volume of each reconstruction vs. the segmentation's voxel volume (ratio �
 
 | case | linear (mm³) | spline (mm³) | sdf (mm³) | voxel GT (mm³) | ratio (linear) |
 |---|---|---|---|---|---|
-| BraTS-GLI-00046-101 | 37 513 | 38 479 | 36 557 | 25 306 | 1.48 |
-| BraTS-GLI-00080-101 | 25 929 | 26 971 | 27 172 | 22 395 | 1.16 |
-| BraTS-GLI-00469-100 | 41 971 | 43 706 | 41 929 | 34 911 | 1.20 |
+| BraTS-GLI-00528-100 | 67 253 | 79 819 | 60 086 | 67 375 | 1.00 |
+| BraTS-GLI-02066-105 | 104 743 | 111 166 | 109 330 | 103 176 | 1.02 |
+| BraTS-GLI-02066-103 | 62 048 | 62 115 | 61 976 | 59 755 | 1.04 |
+| BraTS-GLI-02071-101 | 31 262 | 32 266 | 31 554 | 26 968 | 1.16 |
 
-All reconstructions are **closed and volume-bounding**. Volumes run slightly **above** the
-voxel ground truth because the Poisson surface wraps the *outer* contour stack and fills
-annular/necrotic cores that the voxel mask leaves hollow.
+All reconstructions are **closed and volume-bounding**, and the volumes are **close to the
+voxel ground truth** (linear ratio ≈ 1.00–1.16 across these cases). Where it runs high, the
+Poisson surface is wrapping the *outer* contour stack and filling annular/necrotic cores
+that the voxel mask leaves hollow.
 
-### Ground truth vs. reconstruction (case 00046-101)
+### Ground truth vs. reconstruction (case 00528-101)
 
 | Ground truth (marching cubes of voxels) | Linear interpolation (Poisson) |
 |---|---|
-| ![gt](assets/img/mesh_BraTS-GLI-00046-101_gt.png) | ![linear](assets/img/mesh_BraTS-GLI-00046-101_linear.png) |
+| ![gt](assets/img/mesh_BraTS-GLI-00528-101_gt.png) | ![linear](assets/img/mesh_BraTS-GLI-00528-101_linear.png) |
 
 The reconstruction matches the overall tumor shape; the ground truth is blockier because it
 is the raw voxel mask, while the reconstruction is a smooth interpolated surface.
 
 ## 3. Interactive dashboard
 
-`scripts/build_dashboard.py` produces a single self-contained `dashboard.html` with, per
-case, **rotatable 3D surfaces** for *ground truth · linear · spline · SDF* side by side,
-plus the tables above. It is written to `data/results/dashboard.html` (that folder is
-git-ignored, so the file is generated locally rather than committed).
+`scripts/build_dashboard.py` produces a single self-contained dashboard with a **tumor
+selector dropdown**: pick a case and only its **rotatable 3D surfaces** (*ground truth ·
+linear · spline · SDF*) and per-case metrics table are shown. A built copy with 8 tumors is
+committed at [`assets/dashboard.html`](assets/dashboard.html) — open it in any browser.
+Re-generate after a run with `build_dashboard.py`.
 
 ## How to reproduce
 
@@ -75,7 +78,7 @@ git-ignored, so the file is generated locally rather than committed).
 BIN=~/builds/contour/contour_interpolator
 python3 scripts/run_real_study.py \
         --dataset /path/to/BraTS2024-GLI/training_data1_v2 --bin "$BIN" \
-        --extract 40 --topk 10 --n-vis 3
+        --extract 120 --topk 50 --n-vis 8
 python3 scripts/build_dashboard.py --results data/results --out data/results/dashboard.html
 # outputs: loo_aggregate.csv/png, loo_stats.csv, reconstruction_summary.csv,
 #          mesh_<case>_<method>.off/.ply/.png, dashboard.html
@@ -90,4 +93,5 @@ python3 scripts/build_dashboard.py --results data/results --out data/results/das
 - **Reconstruction robustness:** sparse/irregular ring stacks once collapsed the Poisson
   mesh; this was fixed by falling back to the in-plane outward normal for points the
   normal-orientation step could not resolve.
-- Numbers above are from 10 cases; rerun with a larger `--topk` for final-report statistics.
+- Numbers above are from 50 cases (2 240 held-out slices/method); rerun with a larger
+  `--topk` for the full dataset.

@@ -125,7 +125,7 @@ def main() -> int:
         cdir = str(contours / case)
         seg = ds / case / f"{case}-seg.nii.gz"
         gt_vol = voxel_volume_mm3(seg) if seg.exists() else float("nan")
-        if seg.exists() and gt_surface(seg, str(out / f"mesh_{case}_gt.off")):
+        if seg.exists() and gt_surface(seg, str(out / f"mesh_{case}_gt.off"), step=3):
             run([sys.executable, str(HERE / "render_mesh.py"),
                  str(out / f"mesh_{case}_gt.off"),
                  str(out / f"mesh_{case}_gt.png"), "--title", f"{case} ground truth"])

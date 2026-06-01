@@ -74,7 +74,7 @@ venv/
 # Final project: BraTS data and outputs (no subir al repo)
 src/final-project-interpolation/data/
 src/final-project-interpolation/output/
-src/final-project-interpolation/src/interpolation-lineal/output/
+src/final-project-interpolation/src/interpolation-lineal/output/*
 !src/final-project-interpolation/src/interpolation-lineal/output/dashboard_lineal.html
 
 # LaTeX auxiliares

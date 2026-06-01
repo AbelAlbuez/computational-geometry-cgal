@@ -75,6 +75,7 @@ venv/
 src/final-project-interpolation/data/
 src/final-project-interpolation/output/
 src/final-project-interpolation/src/interpolation-lineal/output/
+!src/final-project-interpolation/src/interpolation-lineal/output/dashboard_lineal.html
 
 # LaTeX auxiliares
 src/final-project-interpolation/latex/informe.aux

@@ -274,7 +274,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   .summary { background: #fff; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; max-width: 980px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="plotly.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.27.0/plotly.js"></script>
 </head>
 <body>
 

@@ -493,20 +493,21 @@ for (const p of PAIRS) {
   pending3D.push({ panel, divId, fig });
 }
 
-// Lazy render when in viewport.
-const io3d = new IntersectionObserver((entries, obs) => {
-  for (const e of entries) {
-    if (!e.isIntersecting) continue;
-    const item = pending3D.find(s => s.panel === e.target);
-    if (item && !item.rendered) {
-      item.rendered = true;
-      Plotly.newPlot(item.divId, item.fig.data, item.fig.layout,
-                     { responsive: true, displaylogo: false });
-      obs.unobserve(e.target);
-    }
+// Render all 3D scenes after the Plotly bundle is fully parsed.
+// The inline bundle is ~4.8 MB so it may not be ready at script execution
+// time even though the <script> tag appears before this block.
+function renderPlotly3D() {
+  for (const item of pending3D) {
+    Plotly.newPlot(item.divId, item.fig.data, item.fig.layout,
+                   { responsive: true, displaylogo: false });
   }
-}, { rootMargin: "100px" });
-for (const s of pending3D) io3d.observe(s.panel);
+}
+
+if (document.readyState === 'complete') {
+  renderPlotly3D();
+} else {
+  window.addEventListener('load', renderPlotly3D);
+}
 
 // -----------------------------------------------------------------------------
 // Section 5: summary.

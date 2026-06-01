@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib.path import Path as MplPath
 from scipy.spatial.distance import directed_hausdorff
-from plotly.offline import get_plotlyjs
+import plotly.graph_objects as go
 
 
 ROOT     = Path(__file__).resolve().parent.parent
@@ -274,8 +274,6 @@ HTML_TEMPLATE = r"""<!doctype html>
   .summary { background: #fff; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; max-width: 980px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
-<script>__PLOTLY_BUNDLE__</script>
 </head>
 <body>
 
@@ -331,7 +329,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   color codifica <em>z</em> (escala RdYlGn). Rotar: clic izquierdo ·
   zoom: scroll · pan: clic derecho.
 </p>
-<div id="viz3d-grid" class="grid"></div>
+__SECTION4_HTML__
 
 <h2>5. Resumen</h2>
 <div class="summary" id="summary"></div>
@@ -473,41 +471,9 @@ for (const p of PAIRS) {
 }
 
 // -----------------------------------------------------------------------------
-// Section 4: 3D surface (Plotly mesh3d, triangulated between layers).
+// Section 4: 3D surface is rendered by plotly.py (fig.to_html) injected via
+// the __SECTION4_HTML__ placeholder above. No JS needed here.
 // -----------------------------------------------------------------------------
-const PLOTLY3D = __PLOTLY3D_JSON__;
-
-const viz3dGrid = document.getElementById("viz3d-grid");
-const pending3D = [];
-for (const p of PAIRS) {
-  const fig = PLOTLY3D[p.label];
-  if (!fig) continue;
-  const panel = document.createElement("div");
-  panel.className = "panel";
-  const divId = `plotly-3d-${p.label}`;
-  panel.innerHTML = `
-    <h3>${p.label} — ${p.descripcion}</h3>
-    <div id="${divId}" style="width:100%;height:480px;"></div>
-  `;
-  viz3dGrid.appendChild(panel);
-  pending3D.push({ panel, divId, fig });
-}
-
-// Render all 3D scenes after the Plotly bundle is fully parsed.
-// The inline bundle is ~4.8 MB so it may not be ready at script execution
-// time even though the <script> tag appears before this block.
-function renderPlotly3D() {
-  for (const item of pending3D) {
-    Plotly.newPlot(item.divId, item.fig.data, item.fig.layout,
-                   { responsive: true, displaylogo: false });
-  }
-}
-
-if (document.readyState === 'complete') {
-  renderPlotly3D();
-} else {
-  window.addEventListener('load', renderPlotly3D);
-}
 
 // -----------------------------------------------------------------------------
 // Section 5: summary.
@@ -606,91 +572,76 @@ def build_stress_section() -> str:
 """
 
 
-def build_3d_plotly_data(results):
-    """Triangulate between consecutive interpolated layers and return one
-    Plotly mesh3d figure dict per pair, keyed by label."""
-    figs = {}
+def build_3d_figure(results):
+    """Build a single plotly.graph_objects.Figure with one Mesh3d trace per
+    pair. Each trace stacks the 11 interpolated contours at z=t*10 and
+    triangulates between consecutive layers (correspondence guaranteed by
+    the arc-length resampling already done by the C++ binary)."""
+    fig = go.Figure()
     for r in results:
-        # Stack the 11 interpolated contours t=0..1 at z=t*10.
-        t_keys = sorted(r["interpolated"].keys(), key=float)
-        layers = [r["interpolated"][t] for t in t_keys]
-        ns     = {len(L) for L in layers}
-        if len(ns) != 1 or 0 in ns:
-            print(f"  WARN: par {r['label']} tiene capas con conteo desigual "
-                  f"{ns}; se omite mesh3d.", file=sys.stderr)
+        label  = r["label"]
+        layers = r["interpolated"]
+        ns = [len(pts) for pts in layers.values()]
+        if len(set(ns)) != 1 or ns[0] == 0:
+            print(f"[SKIP] {label}: capas con n distinto {set(ns)}",
+                  file=sys.stderr)
             continue
-        n = ns.pop()
+        n = ns[0]
 
-        # Centrar en el centroide de la primera capa para ejes más cómodos.
-        all_pts = np.array(layers[0])
-        cx, cy  = all_pts.mean(axis=0)
+        pts0 = layers["0.0"]
+        cx = sum(p[0] for p in pts0) / n
+        cy = sum(p[1] for p in pts0) / n
 
+        sorted_layers = sorted(layers.items(), key=lambda kv: float(kv[0]))
         xs, ys, zs = [], [], []
-        for ti, L in zip(t_keys, layers):
-            z = float(ti) * 10.0
-            for (x, y) in L:
-                xs.append(x - cx)
-                ys.append(y - cy)
+        for t_str, pts in sorted_layers:
+            z = float(t_str) * 10.0
+            for p in pts:
+                xs.append(p[0] - cx)
+                ys.append(p[1] - cy)
                 zs.append(z)
 
-        # Triangulate between layer k and k+1.
-        I, J, K = [], [], []
-        for k in range(len(layers) - 1):
-            base0 = k * n
-            base1 = (k + 1) * n
-            for i in range(n):
-                j = (i + 1) % n
-                # Triangle 1: (i, j, n+i)
-                I.append(base0 + i)
-                J.append(base0 + j)
-                K.append(base1 + i)
-                # Triangle 2: (j, n+j, n+i)
-                I.append(base0 + j)
-                J.append(base1 + j)
-                K.append(base1 + i)
+        num_layers = len(sorted_layers)
+        ii, jj, kk = [], [], []
+        for layer in range(num_layers - 1):
+            base = layer * n
+            for v in range(n):
+                j = (v + 1) % n
+                ii.append(base + v);     jj.append(base + j);         kk.append(base + n + v)
+                ii.append(base + j);     jj.append(base + n + j);     kk.append(base + n + v)
 
-        figs[r["label"]] = {
-            "data": [{
-                "type":       "mesh3d",
-                "x":          xs,
-                "y":          ys,
-                "z":          zs,
-                "i":          I,
-                "j":          J,
-                "k":          K,
-                "intensity":  zs,
-                "colorscale": "RdYlGn",
-                "reversescale": True,
-                "opacity":    0.7,
-                "name":       r["label"],
-                "showscale":  True,
-                "colorbar":   {"title": "z = t×10",
-                               "tickfont": {"color": "#eee"},
-                               "titlefont": {"color": "#eee"}},
-                "flatshading": False,
-            }],
-            "layout": {
-                "title": {
-                    "text": f"Reconstrucción 3D — {r['descripcion']}",
-                    "font": {"color": "#eee", "size": 14},
-                },
-                "paper_bgcolor": "#1a1a2e",
-                "plot_bgcolor":  "#1a1a2e",
-                "font": {"color": "#ddd"},
-                "margin": {"l": 0, "r": 0, "t": 40, "b": 0},
-                "scene": {
-                    "xaxis": {"title": "x (mm)", "backgroundcolor": "#1a1a2e",
-                              "gridcolor": "#444466", "zerolinecolor": "#666688"},
-                    "yaxis": {"title": "y (mm)", "backgroundcolor": "#1a1a2e",
-                              "gridcolor": "#444466", "zerolinecolor": "#666688"},
-                    "zaxis": {"title": "z = t×10", "backgroundcolor": "#1a1a2e",
-                              "gridcolor": "#444466", "zerolinecolor": "#666688"},
-                    "bgcolor": "#1a1a2e",
-                    "aspectmode": "data",
-                },
-            },
-        }
-    return figs
+        fig.add_trace(go.Mesh3d(
+            x=xs, y=ys, z=zs,
+            i=ii, j=jj, k=kk,
+            intensity=zs,
+            colorscale="RdYlGn",
+            reversescale=True,
+            opacity=0.7,
+            name=label,
+            showscale=True,
+            colorbar=dict(title="z = t×10"),
+            flatshading=False,
+        ))
+
+    fig.update_layout(
+        title="Reconstrucción 3D — contornos interpolados",
+        paper_bgcolor="#1a1a2e",
+        plot_bgcolor="#1a1a2e",
+        font=dict(color="#ddd"),
+        scene=dict(
+            xaxis=dict(title="x (mm)", backgroundcolor="#1a1a2e",
+                       gridcolor="#444466", zerolinecolor="#666688"),
+            yaxis=dict(title="y (mm)", backgroundcolor="#1a1a2e",
+                       gridcolor="#444466", zerolinecolor="#666688"),
+            zaxis=dict(title="z = t×10", backgroundcolor="#1a1a2e",
+                       gridcolor="#444466", zerolinecolor="#666688"),
+            bgcolor="#1a1a2e",
+            aspectmode="data",
+        ),
+        margin=dict(l=0, r=0, t=40, b=0),
+        height=520,
+    )
+    return fig
 
 
 def main():
@@ -703,15 +654,20 @@ def main():
 
     payload = json.dumps(results, ensure_ascii=False, separators=(",", ":"))
     html    = HTML_TEMPLATE.replace("__PAIRS_JSON__", payload)
-    plotly3d = build_3d_plotly_data(results)
-    html    = html.replace(
-        "__PLOTLY3D_JSON__",
-        json.dumps(plotly3d, ensure_ascii=False, separators=(",", ":")),
+
+    # Section 4: rendered fully by plotly.py (matches Santiago's approach).
+    # include_plotlyjs=True embeds the full bundle inline in this fragment,
+    # so no CDN dependency and no manual Plotly.newPlot wiring is needed.
+    fig3d         = build_3d_figure(results)
+    section4_html = fig3d.to_html(
+        full_html=False,
+        include_plotlyjs=True,
+        div_id="plotly-3d-main",
+        config={"responsive": True, "displaylogo": False},
     )
-    html    = html.replace("__STRESS_SECTION__", build_stress_section())
-    # Inline plotly.js bundle (matches Santiago's strategy: no CDN dependency,
-    # works offline / file:// without network access).
-    html    = html.replace("__PLOTLY_BUNDLE__", get_plotlyjs())
+    html = html.replace("__SECTION4_HTML__", section4_html)
+
+    html = html.replace("__STRESS_SECTION__", build_stress_section())
     OUT_HTML.write_text(html, encoding="utf-8")
     print(f"\nDashboard escrito en {OUT_HTML.relative_to(ROOT)}")
 

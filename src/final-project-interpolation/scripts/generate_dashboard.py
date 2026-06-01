@@ -12,6 +12,8 @@ Usage:
 
 Must be run from src/final-project-interpolation/ with the venv activated.
 """
+import base64
+import io
 import json
 import subprocess
 import sys
@@ -19,9 +21,13 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from matplotlib.path import Path as MplPath
 from scipy.spatial.distance import directed_hausdorff
 import plotly.graph_objects as go
+from plotly.offline import get_plotlyjs
 
 
 ROOT     = Path(__file__).resolve().parent.parent
@@ -39,7 +45,7 @@ PAIRS_SPEC = [
         "slice_b":  "slice_0072",
         "slice_gt": "slice_0071",
         "label":    "caso1_gt",
-        "descripcion": "Caso 100 — slices 70/72 con GT 71",
+        "descripcion": "Caso 00008-100 — slices 70/72 con GT 71",
     },
     {
         "case":     "BraTS-GLI-00008-101",
@@ -47,7 +53,31 @@ PAIRS_SPEC = [
         "slice_b":  "slice_0072",
         "slice_gt": "slice_0071",
         "label":    "caso2_gt",
-        "descripcion": "Caso 101 — slices 70/72 con GT 71",
+        "descripcion": "Caso 00008-101 — slices 70/72 con GT 71",
+    },
+    {
+        "case":     "BraTS-GLI-00009-101",
+        "slice_a":  "slice_0070",
+        "slice_b":  "slice_0072",
+        "slice_gt": "slice_0071",
+        "label":    "caso3_gt",
+        "descripcion": "Caso 00009-101 — slices 70/72 con GT 71",
+    },
+    {
+        "case":     "BraTS-GLI-00020-100",
+        "slice_a":  "slice_0070",
+        "slice_b":  "slice_0072",
+        "slice_gt": "slice_0071",
+        "label":    "caso4_gt",
+        "descripcion": "Caso 00020-100 — slices 70/72 con GT 71",
+    },
+    {
+        "case":     "BraTS-GLI-00528-101",
+        "slice_a":  "slice_0070",
+        "slice_b":  "slice_0072",
+        "slice_gt": "slice_0071",
+        "label":    "caso5_gt",
+        "descripcion": "Caso 00528-101 — slices 70/72 con GT 71",
     },
 ]
 
@@ -258,23 +288,20 @@ HTML_TEMPLATE = r"""<!doctype html>
   th, td { border: 1px solid #ccc; padding: 6px 12px; text-align: right; font-size: 13px; }
   th { background: #f0f0f0; }
   td:first-child, th:first-child, td.txt, th.txt { text-align: left; }
+  #metrics-table tbody tr:hover { background: #f3f8fe; }
   .good { background: #d4edda; }
   .mid  { background: #fff3cd; }
   .bad  { background: #f8d7da; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .panel { background: #fff; border: 1px solid #ddd; padding: 12px; border-radius: 6px; }
   .panel h3 { margin: 0 0 6px; font-size: 14px; }
-  .slider-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
-  .slider-row input[type=range] { flex: 1; }
-  .t-label { font-family: ui-monospace, Menlo, monospace; font-size: 13px; min-width: 64px; }
-  svg { width: 100%; height: 420px; background: #fff; }
-  .legend { font-size: 12px; color: #444; margin-top: 4px; }
-  .legend span { display: inline-block; margin-right: 12px; }
-  .swatch { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; }
   .summary { background: #fff; border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; max-width: 980px; }
+  .summary-card { transition: border-color .12s ease; }
+  .summary-card:hover { border-color: #378ADD !important; }
+  .metric-card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; }
+  .mc-label { font-size: 11px; color: #777; text-transform: uppercase; letter-spacing: .04em; }
+  .mc-val   { font-size: 20px; font-weight: 700; color: #222; margin-top: 2px; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.27.0/plotly.js"></script>
+__PLOTLY_BUNDLE__
 </head>
 <body>
 
@@ -282,12 +309,16 @@ HTML_TEMPLATE = r"""<!doctype html>
 <p class="note">
   Dashboard con métricas por par (Dice, IoU, Hausdorff, areaErr) comparando
   el contorno interpolado a <em>t</em>=0.5 contra el slice GT real intermedio.
-  El visualizador interactivo permite recorrer <em>t</em> ∈ [0, 1] en pasos de
-  0.1; los contornos azul (A), rojo (B) y naranja (GT) permanecen fijos, y el
-  contorno verde se actualiza con los vértices precalculados para cada <em>t</em>.
+  Haz clic en cualquier <em>card</em> de resumen o en una fila de la tabla para
+  activar ese par en el visualizador; el <em>slider</em> recorre <em>t</em> ∈
+  [0, 1] en pasos de 0.1 mostrando 11 fotogramas precalculados.
 </p>
 
-<h2>1. Métricas por par</h2>
+<h2>1. Resumen — 5 pares</h2>
+<div id="cards-row" style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px;"></div>
+<p class="note">Card activa: borde azul. Click → activa el par en el visualizador (sección 3).</p>
+
+<h2>2. Métricas por par</h2>
 <table id="metrics-table">
   <thead>
     <tr>
@@ -304,22 +335,38 @@ HTML_TEMPLATE = r"""<!doctype html>
 </table>
 <p class="note">
   Verde: Dice ≥ 0.90 / IoU ≥ 0.80 / Hausdorff ≤ 3 / areaErr ≤ 0.05 ·
-  Amarillo: zona intermedia · Rojo: peor desempeño.
+  Amarillo: zona intermedia · Rojo: peor desempeño. Fila activa resaltada en azul.
 </p>
 
-<h2>2. Comparativa por métrica</h2>
-<div class="grid">
-  <div class="panel"><h3>Dice (mayor es mejor)</h3><canvas id="chart-dice"></canvas></div>
-  <div class="panel"><h3>IoU (mayor es mejor)</h3><canvas id="chart-iou"></canvas></div>
-  <div class="panel"><h3>Hausdorff (menor es mejor)</h3><canvas id="chart-hd"></canvas></div>
-  <div class="panel"><h3>areaErr (menor es mejor)</h3><canvas id="chart-aerr"></canvas></div>
+<h2>3. Visualizador de contornos</h2>
+<div style="display:flex; gap:12px; align-items:flex-start; max-width:980px;">
+
+  <div style="flex:1;">
+    <img id="contour-img" style="width:100%; border-radius:8px; border:1px solid #ddd;" />
+    <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+      <span style="font-size:13px; color:#555;">t =</span>
+      <input id="t-slider" type="range" min="0" max="10" value="5"
+             style="flex:1;" oninput="onSlider(this.value)">
+      <span id="t-label" style="font-family:monospace; min-width:32px;">0.5</span>
+    </div>
+  </div>
+
+  <div style="width:160px; display:flex; flex-direction:column; gap:8px;">
+    <div class="metric-card"><div class="mc-label">Dice</div>
+      <div id="mc-dice" class="mc-val"></div></div>
+    <div class="metric-card"><div class="mc-label">IoU</div>
+      <div id="mc-iou"  class="mc-val"></div></div>
+    <div class="metric-card"><div class="mc-label">Hausdorff</div>
+      <div id="mc-haus" class="mc-val"></div></div>
+    <div class="metric-card"><div class="mc-label">Self-int</div>
+      <div id="mc-si"   class="mc-val"></div></div>
+  </div>
+
 </div>
 
-<h2>3. Visualizador interactivo — slider de <em>t</em></h2>
-<div id="viz-grid" class="grid"></div>
+__STRESS_SECTION__
 
-<h2>4. Visualización 3D — reconstrucción por mallado
-   entre capas</h2>
+<h2>5. Visualización 3D — reconstrucción por mallado entre capas</h2>
 <p class="note">
   Reconstrucción 3D (Plotly <code>mesh3d</code>) de los 11 contornos
   interpolados (<em>t</em>=0.0 a 1.0) apilados en el eje
@@ -330,168 +377,132 @@ HTML_TEMPLATE = r"""<!doctype html>
   color codifica <em>z</em> (escala RdYlGn). Rotar: clic izquierdo ·
   zoom: scroll · pan: clic derecho.
 </p>
-__SECTION4_HTML__
+__FIG3D_HTML__
 
-<h2>5. Resumen</h2>
-<div class="summary" id="summary"></div>
+<h2>6. Resumen global</h2>
+<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; max-width:980px;"
+     id="summary-cards"></div>
+<p class="note">
+  Promedios sobre los 5 pares. GT = slice real intermedio (BraTS). El
+  interpolado a t=0.5 se rasteriza en una grilla 512×512 dentro del bounding box
+  común para calcular Dice/IoU; Hausdorff se computa directamente entre vértices.
+</p>
 
 <script>
-const PAIRS = __PAIRS_JSON__;
+var PAIRS = __PAIRS_JSON__;
+var activeIdx = 0;
 
-// -----------------------------------------------------------------------------
-// Section 1: metrics table.
-// -----------------------------------------------------------------------------
-function cls(v, good, mid, lowerBetter=false) {
-  if (Number.isNaN(v)) return "";
+function cls(v, good, mid, lowerBetter) {
+  if (typeof v !== "number" || isNaN(v)) return "";
   if (lowerBetter) {
     if (v <= good) return "good";
     if (v <= mid)  return "mid";
     return "bad";
-  } else {
-    if (v >= good) return "good";
-    if (v >= mid)  return "mid";
-    return "bad";
   }
+  if (v >= good) return "good";
+  if (v >= mid)  return "mid";
+  return "bad";
 }
 
-const tbody = document.querySelector("#metrics-table tbody");
-for (const p of PAIRS) {
-  const m = p.metrics;
-  const tr = document.createElement("tr");
-  tr.innerHTML = `
-    <td class="txt">${p.label}<br><span style="color:#777;font-size:11px">${p.case}</span></td>
-    <td class="txt">${p.slice_a} / <b>${p.slice_gt}</b> / ${p.slice_b}</td>
-    <td class="${cls(m.dice, 0.90, 0.75)}">${m.dice.toFixed(4)}</td>
-    <td class="${cls(m.iou,  0.80, 0.60)}">${m.iou.toFixed(4)}</td>
-    <td class="${cls(m.hausdorff, 3.0, 6.0, true)}">${m.hausdorff.toFixed(3)}</td>
-    <td class="${cls(m.area_err, 0.05, 0.15, true)}">${m.area_err.toFixed(4)}</td>
-    <td class="txt">${m.self_int ? "yes" : "no"}</td>
-  `;
+function fmt(v, d) { return (typeof v === "number" && !isNaN(v)) ? v.toFixed(d) : "–"; }
+
+// -----------------------------------------------------------------------------
+// Section 1: summary cards (one per pair).
+// -----------------------------------------------------------------------------
+var cardsRow = document.getElementById("cards-row");
+PAIRS.forEach(function (p, i) {
+  var m = p.metrics;
+  var diceColor = m.dice >= 0.90 ? "#378ADD" : (m.dice >= 0.75 ? "#E8990C" : "#D64545");
+  var siColor   = m.self_int ? "#E8990C" : "#2E9E5B";
+  var siText    = m.self_int ? "self-int detectada" : "sin self-int";
+  var card = document.createElement("div");
+  card.className = "summary-card";
+  card.style.cssText = "background:#fff;border:0.5px solid #ddd;border-radius:8px;padding:8px;cursor:pointer;";
+  card.onclick = function () { activatePair(i); };
+  card.innerHTML =
+    '<img src="data:image/png;base64,' + p.frames["0.5"] + '" style="width:100%;border-radius:4px;display:block;">' +
+    '<div style="font-size:11px;color:#777;margin-top:6px;">' + p.label + '</div>' +
+    '<div style="font-size:24px;font-weight:700;line-height:1.1;color:' + diceColor + ';">' + m.dice.toFixed(3) + '</div>' +
+    '<div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.04em;">Dice</div>' +
+    '<div style="margin-top:6px;font-size:10px;font-weight:600;color:#fff;background:' + siColor +
+      ';display:inline-block;padding:2px 6px;border-radius:10px;">' + siText + '</div>';
+  cardsRow.appendChild(card);
+});
+
+// -----------------------------------------------------------------------------
+// Section 2: clickable metrics table.
+// -----------------------------------------------------------------------------
+var tbody = document.querySelector("#metrics-table tbody");
+PAIRS.forEach(function (p, i) {
+  var m = p.metrics;
+  var tr = document.createElement("tr");
+  tr.style.cursor = "pointer";
+  tr.onclick = function () { activatePair(i); };
+  tr.innerHTML =
+    '<td class="txt">' + p.label + '<br><span style="color:#777;font-size:11px">' + p.case + '</span></td>' +
+    '<td class="txt">' + p.slice_a + ' / <b>' + p.slice_gt + '</b> / ' + p.slice_b + '</td>' +
+    '<td class="' + cls(m.dice, 0.90, 0.75, false) + '">' + fmt(m.dice, 4) + '</td>' +
+    '<td class="' + cls(m.iou, 0.80, 0.60, false) + '">' + fmt(m.iou, 4) + '</td>' +
+    '<td class="' + cls(m.hausdorff, 3.0, 6.0, true) + '">' + fmt(m.hausdorff, 3) + '</td>' +
+    '<td class="' + cls(m.area_err, 0.05, 0.15, true) + '">' + fmt(m.area_err, 4) + '</td>' +
+    '<td class="txt">' + (m.self_int ? "yes" : "no") + '</td>';
   tbody.appendChild(tr);
-}
+});
 
 // -----------------------------------------------------------------------------
-// Section 2: bar charts.
+// Section 3: slider + per-pair metric panel.
 // -----------------------------------------------------------------------------
-const labels = PAIRS.map(p => p.label);
-function bar(id, key, title) {
-  new Chart(document.getElementById(id), {
-    type: "bar",
-    data: {
-      labels: labels,
-      datasets: [{
-        label: title,
-        data:  PAIRS.map(p => p.metrics[key]),
-        backgroundColor: "rgba(33,150,243,0.7)",
-        borderColor:     "rgba(33,150,243,1)",
-        borderWidth: 1,
-      }],
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales:  { y: { beginAtZero: true } },
-    },
+function onSlider(val) {
+  var tStr = (parseInt(val, 10) / 10).toFixed(1);
+  document.getElementById("t-label").textContent = tStr;
+  var p = PAIRS[activeIdx];
+  document.getElementById("contour-img").src =
+    "data:image/png;base64," + p.frames[tStr];
+}
+
+function activatePair(i) {
+  activeIdx = i;
+  var p = PAIRS[i];
+  var m = p.metrics;
+
+  document.getElementById("t-slider").value = 5;
+  onSlider(5);
+
+  document.getElementById("mc-dice").textContent = fmt(m.dice, 3);
+  document.getElementById("mc-iou").textContent  = fmt(m.iou, 3);
+  document.getElementById("mc-haus").textContent = fmt(m.hausdorff, 2);
+  document.getElementById("mc-si").textContent   = m.self_int ? "detectadas" : "no";
+
+  document.querySelectorAll(".summary-card").forEach(function (c, j) {
+    c.style.border = j === i ? "2px solid #378ADD" : "0.5px solid #ddd";
+  });
+  document.querySelectorAll("#metrics-table tbody tr").forEach(function (r, j) {
+    r.style.background = j === i ? "#E6F1FB" : "";
   });
 }
-bar("chart-dice", "dice",      "Dice");
-bar("chart-iou",  "iou",       "IoU");
-bar("chart-hd",   "hausdorff", "Hausdorff");
-bar("chart-aerr", "area_err",  "areaErr");
 
 // -----------------------------------------------------------------------------
-// Section 3: interactive SVG viewer with t-slider.
+// Section 6: global summary cards (averages).
 // -----------------------------------------------------------------------------
-const NS = "http://www.w3.org/2000/svg";
-
-function bboxOf(...contours) {
-  let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
-  for (const c of contours) for (const [x, y] of c) {
-    if (x < xmin) xmin = x; if (x > xmax) xmax = x;
-    if (y < ymin) ymin = y; if (y > ymax) ymax = y;
-  }
-  const pad = 0.05 * Math.max(xmax - xmin, ymax - ymin, 1);
-  return { xmin: xmin - pad, xmax: xmax + pad, ymin: ymin - pad, ymax: ymax + pad };
-}
-
-function pathD(contour, bb, w, h) {
-  if (!contour.length) return "";
-  const sx = x => ((x - bb.xmin) / (bb.xmax - bb.xmin)) * w;
-  const sy = y => h - ((y - bb.ymin) / (bb.ymax - bb.ymin)) * h;     // flip y
-  let d = `M ${sx(contour[0][0])} ${sy(contour[0][1])}`;
-  for (let i = 1; i < contour.length; ++i)
-    d += ` L ${sx(contour[i][0])} ${sy(contour[i][1])}`;
-  d += " Z";
-  return d;
-}
-
-const vizGrid = document.getElementById("viz-grid");
-for (const p of PAIRS) {
-  const panel = document.createElement("div");
-  panel.className = "panel";
-  panel.innerHTML = `
-    <h3>${p.label} — ${p.descripcion}</h3>
-    <div class="slider-row">
-      <span class="t-label">t = <b id="tval-${p.label}">0.5</b></span>
-      <input type="range" min="0" max="10" value="5" id="slider-${p.label}">
-    </div>
-    <svg id="svg-${p.label}" viewBox="0 0 600 420" preserveAspectRatio="xMidYMid meet">
-      <path id="pa-${p.label}"  fill="none" stroke="#1f77b4" stroke-width="1.4" stroke-dasharray="4 3"/>
-      <path id="pb-${p.label}"  fill="none" stroke="#d62728" stroke-width="1.4" stroke-dasharray="4 3"/>
-      <path id="pgt-${p.label}" fill="none" stroke="#ff7f0e" stroke-width="1.4" stroke-dasharray="4 3"/>
-      <path id="pi-${p.label}"  fill="none" stroke="#2ca02c" stroke-width="2.2"/>
-    </svg>
-    <div class="legend">
-      <span><span class="swatch" style="background:#1f77b4"></span>A (${p.slice_a})</span>
-      <span><span class="swatch" style="background:#d62728"></span>B (${p.slice_b})</span>
-      <span><span class="swatch" style="background:#ff7f0e"></span>GT (${p.slice_gt})</span>
-      <span><span class="swatch" style="background:#2ca02c"></span>Interpolado(t)</span>
-    </div>
-  `;
-  vizGrid.appendChild(panel);
-
-  const allInterp = Object.values(p.interpolated).flat();
-  const bb = bboxOf(p.contour_a, p.contour_b, p.contour_gt, allInterp);
-  const W = 600, H = 420;
-  document.getElementById(`pa-${p.label}`).setAttribute("d",  pathD(p.contour_a,  bb, W, H));
-  document.getElementById(`pb-${p.label}`).setAttribute("d",  pathD(p.contour_b,  bb, W, H));
-  document.getElementById(`pgt-${p.label}`).setAttribute("d", pathD(p.contour_gt, bb, W, H));
-
-  const piEl   = document.getElementById(`pi-${p.label}`);
-  const tLabel = document.getElementById(`tval-${p.label}`);
-  const slider = document.getElementById(`slider-${p.label}`);
-
-  function setT(idx) {
-    const tStr = (idx / 10).toFixed(1);
-    tLabel.textContent = tStr;
-    const c = p.interpolated[tStr] || [];
-    piEl.setAttribute("d", pathD(c, bb, W, H));
-  }
-  setT(5);
-  slider.addEventListener("input", e => setT(parseInt(e.target.value, 10)));
-}
+var mean = function (arr) { return arr.reduce(function (a, b) { return a + b; }, 0) / arr.length; };
+var sc = document.getElementById("summary-cards");
+[
+  ["Dice promedio",      fmt(mean(PAIRS.map(function (p) { return p.metrics.dice;      })), 4)],
+  ["IoU promedio",       fmt(mean(PAIRS.map(function (p) { return p.metrics.iou;       })), 4)],
+  ["Hausdorff promedio", fmt(mean(PAIRS.map(function (p) { return p.metrics.hausdorff; })), 3)],
+  ["areaErr promedio",   fmt(mean(PAIRS.map(function (p) { return p.metrics.area_err;  })), 4)],
+].forEach(function (kv) {
+  var d = document.createElement("div");
+  d.className = "metric-card";
+  d.innerHTML = '<div class="mc-label">' + kv[0] + '</div><div class="mc-val">' + kv[1] + '</div>';
+  sc.appendChild(d);
+});
 
 // -----------------------------------------------------------------------------
-// Section 5: summary.
+// Init.
 // -----------------------------------------------------------------------------
-const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
-const summary = document.getElementById("summary");
-summary.innerHTML = `
-  <b>Promedio sobre ${PAIRS.length} pares:</b><br>
-  Dice = ${mean(PAIRS.map(p => p.metrics.dice)).toFixed(4)} ·
-  IoU = ${mean(PAIRS.map(p => p.metrics.iou)).toFixed(4)} ·
-  Hausdorff = ${mean(PAIRS.map(p => p.metrics.hausdorff)).toFixed(3)} ·
-  areaErr = ${mean(PAIRS.map(p => p.metrics.area_err)).toFixed(4)}
-  <br><br>
-  <span class="note">
-    GT = slice real intermedio (BraTS). El interpolado a t=0.5 se rasteriza en
-    una grilla 512×512 dentro del bounding box común para calcular Dice/IoU;
-    Hausdorff se computa directamente entre vértices.
-  </span>
-`;
+activatePair(0);
 </script>
-
-__STRESS_SECTION__
 
 </body>
 </html>
@@ -514,11 +525,12 @@ def build_stress_section() -> str:
         if runs:
             png = runs[-1] / "stress_comparison.png"
             if png.exists():
-                rel = f"output/stress_test/{runs[-1].name}/stress_comparison.png"
+                b64_data = base64.b64encode(png.read_bytes()).decode()
+                src = f"data:image/png;base64,{b64_data}"
                 img_block = (
                     '<div class="panel" style="margin-top:14px;max-width:980px;">'
                     '<h3>Estrella (r=1) vs cuadrado — salida del binario</h3>'
-                    f'<img src="{rel}" alt="Comparativa stress test" '
+                    f'<img src="{src}" alt="Comparativa stress test" '
                     'style="width:100%;height:auto;display:block;'
                     'border:1px solid #ddd;border-radius:4px;">'
                     '<p class="note" style="margin-top:6px;">'
@@ -534,7 +546,7 @@ def build_stress_section() -> str:
         for (r, c, s) in STRESS_ROWS
     )
 
-    return f"""<h2>6. Experimento de stress — Robustez del pipeline</h2>
+    return f"""<h2>4. Experimento de stress — Robustez del pipeline</h2>
 <p class="note">
   Los contornos ET reales de BraTS son empíricamente demasiado convexos
   para producir auto-intersecciones bajo interpolación lineal con
@@ -566,6 +578,77 @@ def build_stress_section() -> str:
 </div>
 {img_block}
 """
+
+
+def _plot_poly(ax, contour, **kw):
+    """Plot a closed polygon (repeating the first vertex to close the loop)."""
+    if not contour:
+        return
+    xs = [p[0] for p in contour] + [contour[0][0]]
+    ys = [p[1] for p in contour] + [contour[0][1]]
+    ax.plot(xs, ys, **kw)
+
+
+def _fig_to_b64(fig) -> str:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=90, bbox_inches="tight")
+    plt.close(fig)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def build_contour_images(results):
+    """Render 11 matplotlib PNG frames (t = 0.0, 0.1, … 1.0) per pair and embed
+    each as base64. A (blue dotted), B (red dotted) and GT (orange dashed) are
+    fixed; only the green interpolated contour changes per frame. Axis limits
+    are shared across frames so the polygon does not jump while sliding t.
+    Uses ax.set_aspect("equal") + ax.invert_yaxis() (image coordinates).
+
+    Returns a list of dicts:
+        {label, descripcion, case, slice_a/b/gt, metrics, frames={t: b64}}.
+    """
+    out = []
+    for r in results:
+        a, b, gt    = r["contour_a"], r["contour_b"], r["contour_gt"]
+        interp_lyr  = r["interpolated"]
+
+        allpts = a + b + gt + [p for c in interp_lyr.values() for p in c]
+        xs = [p[0] for p in allpts]
+        ys = [p[1] for p in allpts]
+        pad  = 0.05 * max(max(xs) - min(xs), max(ys) - min(ys), 1.0)
+        xlim = (min(xs) - pad, max(xs) + pad)
+        ylim = (min(ys) - pad, max(ys) + pad)
+
+        frames = {}
+        for i in range(11):
+            t_str  = f"{i / 10:.1f}"
+            interp = interp_lyr.get(t_str, [])
+
+            fig, ax = plt.subplots(figsize=(4.6, 4.6))
+            _plot_poly(ax, a,  color="#1f77b4", ls=":",  lw=1.5, label="A")
+            _plot_poly(ax, b,  color="#d62728", ls=":",  lw=1.5, label="B")
+            _plot_poly(ax, gt, color="#ff7f0e", ls="--", lw=1.5, label="GT")
+            _plot_poly(ax, interp, color="#2ca02c", ls="-", lw=2.6,
+                       label=f"interp t={t_str}")
+            ax.set_xlim(*xlim)
+            ax.set_ylim(*ylim)
+            ax.set_aspect("equal")
+            ax.invert_yaxis()
+            ax.set_title(f"{r['label']} — t = {t_str}", fontsize=11)
+            ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
+            ax.tick_params(labelsize=8)
+            frames[t_str] = _fig_to_b64(fig)
+
+        out.append({
+            "label":       r["label"],
+            "descripcion": r["descripcion"],
+            "case":        r["case"],
+            "slice_a":     r["slice_a"],
+            "slice_b":     r["slice_b"],
+            "slice_gt":    r["slice_gt"],
+            "metrics":     r["metrics"],
+            "frames":      frames,
+        })
+    return out
 
 
 def build_3d_figure(results):
@@ -648,25 +731,31 @@ def main():
     resolved = [resolve_pair(spec) for spec in PAIRS_SPEC]
     results  = [process_pair(spec) for spec in resolved]
 
-    payload = json.dumps(results, ensure_ascii=False, separators=(",", ":"))
+    # Section 3 viewer: 11 base64 PNG frames per pair (no Plotly needed —
+    # the slider just swaps <img> sources). This payload also drives the
+    # section-1 cards, the section-2 table and the section-6 averages.
+    print("Rendering contour frames…")
+    contour_images = build_contour_images(results)
+    payload = json.dumps(contour_images, ensure_ascii=False, separators=(",", ":"))
     html    = HTML_TEMPLATE.replace("__PAIRS_JSON__", payload)
 
-    # Section 4: rendered fully by plotly.py (matches Santiago's approach).
-    # include_plotlyjs=True embeds the full bundle inline in this fragment,
-    # so no CDN dependency and no manual Plotly.newPlot wiring is needed.
-    fig3d         = build_3d_figure(results)
-    section4_html = fig3d.to_html(
+    # Only the 3D figure (section 5) needs Plotly. Embed the full bundle once,
+    # inline in <head>, exactly like the working report.html export — fully
+    # self-contained (no CDN, no local paths) and verified to render.
+    html = html.replace(
+        "__PLOTLY_BUNDLE__",
+        f'<script type="text/javascript">{get_plotlyjs()}</script>',
+    )
+
+    fig3d     = build_3d_figure(results)
+    fig3d.update_layout(height=820)
+    fig3d_html = fig3d.to_html(
         full_html=False,
         include_plotlyjs=False,
         div_id="plotly-3d-main",
         config={"responsive": True, "displaylogo": False},
     )
-    section4_html = (
-        '<div style="width:100%;min-height:520px;display:block;">'
-        + section4_html
-        + '</div>'
-    )
-    html = html.replace("__SECTION4_HTML__", section4_html)
+    html = html.replace("__FIG3D_HTML__", fig3d_html)
 
     html = html.replace("__STRESS_SECTION__", build_stress_section())
     OUT_HTML.parent.mkdir(parents=True, exist_ok=True)

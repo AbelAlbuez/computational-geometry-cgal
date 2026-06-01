@@ -11,18 +11,21 @@ reconstruct a closed 3D surface → compute metrics. Interpolation accuracy is m
 **leave-one-slice-out (LOO)**: hide a real slice, predict it from its neighbours, and
 compare to the held-out truth.
 
-- **Cases evaluated (LOO):** 50 (the most-ET cases among the first 120 extracted).
-- **Held-out slices:** 2 240 per method (gap-corrected: `t` from the true slice heights;
+- **Cases evaluated (LOO):** 110 (the most-ET cases among the first 250 extracted).
+- **Held-out slices:** 5 190 per method (gap-corrected: `t` from the true slice heights;
   triplets with a z-gap > 3 skipped).
-- **3D reconstruction + ground truth:** 8 cases, selectable in the interactive dashboard.
+- **3D reconstruction + ground truth:** 10 cases, selectable in the interactive report.
 
-## 1. Interpolation accuracy (leave-one-slice-out, 50 cases)
+> **Interactive HTML report:** [`assets/report.html`](assets/report.html) — the method
+> equations, the bar/line metric plots, and a 10-tumor 3-D selector, all in one page.
+
+## 1. Interpolation accuracy (leave-one-slice-out, 110 cases)
 
 | method | Dice mean | **Dice median** | **% slices Dice > 0.8** | IoU mean | Hausdorff mean / median (mm) | area-err median |
 |---|---|---|---|---|---|---|
-| **linear** | 0.842 | 0.916 | **77.1 %** | 0.765 | 4.96 / 2.98 | 0.039 |
-| **sdf**    | 0.829 | **0.926** | 75.7 %  | 0.756 | 5.84 / 3.07 | 0.035 |
-| spline     | 0.811 | 0.894 | 69.9 %  | 0.726 | 5.32 / 3.43 | 0.047 |
+| **linear** | 0.850 | 0.917 | **79.6 %** | 0.775 | 4.30 / 2.68 | 0.037 |
+| **sdf**    | 0.834 | **0.924** | 76.6 %  | 0.761 | 4.95 / 2.82 | 0.034 |
+| spline     | 0.821 | 0.899 | 73.9 %  | 0.739 | 4.58 / 3.02 | 0.043 |
 
 ![LOO comparison](assets/img/loo_aggregate.png)
 
@@ -44,15 +47,16 @@ Mesh volume of each reconstruction vs. the segmentation's voxel volume (ratio �
 
 | case | linear (mm³) | spline (mm³) | sdf (mm³) | voxel GT (mm³) | ratio (linear) |
 |---|---|---|---|---|---|
-| BraTS-GLI-00528-100 | 67 253 | 79 819 | 60 086 | 67 375 | 1.00 |
-| BraTS-GLI-02066-105 | 104 743 | 111 166 | 109 330 | 103 176 | 1.02 |
-| BraTS-GLI-02066-103 | 62 048 | 62 115 | 61 976 | 59 755 | 1.04 |
-| BraTS-GLI-02071-101 | 31 262 | 32 266 | 31 554 | 26 968 | 1.16 |
+| BraTS-GLI-02066-105 | 104 752 | 111 162 | 109 310 | 103 176 | 1.02 |
+| BraTS-GLI-02066-103 | 62 047 | 62 114 | 61 985 | 59 755 | 1.04 |
+| BraTS-GLI-02066-104 | 75 675 | 74 491 | 74 199 | 70 823 | 1.07 |
+| BraTS-GLI-00528-101 | 97 646 | 110 038 | 104 883 | 87 993 | 1.11 |
 
-All reconstructions are **closed and volume-bounding**, and the volumes are **close to the
-voxel ground truth** (linear ratio ≈ 1.00–1.16 across these cases). Where it runs high, the
-Poisson surface is wrapping the *outer* contour stack and filling annular/necrotic cores
-that the voxel mask leaves hollow.
+Reconstructions are **closed and volume-bounding**, and for solid tumors the volumes are
+**close to the voxel ground truth** (linear ratio ≈ 1.0–1.1). Where it runs high, the Poisson
+surface wraps the *outer* contour stack and fills annular/necrotic cores the voxel mask
+leaves hollow. Very small / thin tumors (a few thousand mm³) can still under-reconstruct —
+see Limitations.
 
 ### Ground truth vs. reconstruction (case 00528-101)
 
@@ -65,11 +69,13 @@ is the raw voxel mask, while the reconstruction is a smooth interpolated surface
 
 ## 3. Interactive dashboard
 
-`scripts/build_dashboard.py` produces a single self-contained dashboard with a **tumor
-selector dropdown**: pick a case and only its **rotatable 3D surfaces** (*ground truth ·
-linear · spline · SDF*) and per-case metrics table are shown. A built copy with 8 tumors is
-committed at [`assets/dashboard.html`](assets/dashboard.html) — open it in any browser.
-Re-generate after a run with `build_dashboard.py`.
+`scripts/build_report.py` produces a single self-contained **HTML report**
+([`assets/report.html`](assets/report.html)) containing: the method equations (MathJax),
+interactive **bar** plots (Dice/IoU, Hausdorff, %Dice>0.8), interactive **line** plots (Dice
+empirical CDF and per-case mean Dice), and a **tumor selector dropdown** that shows one
+case at a time (*ground truth · linear · spline · SDF* rotatable 3-D + its metrics). Open it
+in any browser; re-generate after a run with `build_report.py`. (`build_dashboard.py` still
+exists for a 3-D-only page.)
 
 ## How to reproduce
 
@@ -91,7 +97,10 @@ python3 scripts/build_dashboard.py --results data/results --out data/results/das
 - **Single contour per slice:** extraction keeps the largest contour, so multi-focal tumors
   are simplified — one reason a few LOO slices score low.
 - **Reconstruction robustness:** sparse/irregular ring stacks once collapsed the Poisson
-  mesh; this was fixed by falling back to the in-plane outward normal for points the
-  normal-orientation step could not resolve.
-- Numbers above are from 50 cases (2 240 held-out slices/method); rerun with a larger
-  `--topk` for the full dataset.
+  mesh; this was largely fixed by falling back to the in-plane outward normal for points the
+  normal-orientation step could not resolve. **Very small / thin tumors** (a few thousand
+  mm³, e.g. 02093-100/101) can still under-reconstruct — their contours are too sparse for a
+  stable Poisson surface; they remain in the dropdown as an honest failure mode.
+- Numbers above are from 110 cases (5 190 held-out slices/method); rerun with a larger
+  `--topk` for the full dataset (the per-slice subprocess LOO makes all 1350 a multi-hour
+  job — feasible only as a background batch / in-process refactor).

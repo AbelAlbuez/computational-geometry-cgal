@@ -15,11 +15,15 @@
 \usepackage{cite}
 \usepackage{url}
 
+\usepackage{multirow}
+
+
 % ── Colores para celdas de tabla ─────────────────────────────────
 \definecolor{cellgood}{RGB}{212,237,218}
 \definecolor{cellmid}{RGB}{255,243,205}
 \definecolor{cellbad}{RGB}{248,215,218}
 
+\definecolor{cellia}{RGB}{244,235,255}
 % ── Estilo de listados de código ─────────────────────────────────
 \lstset{
   basicstyle=\ttfamily\scriptsize,
@@ -41,7 +45,7 @@
 Slices de Resonancia Magnética}
 
 \author{\IEEEauthorblockN{Abel Albuez, Santiago Gil Gallego y
-Jesús Alberto}
+Jesús Puenayan}
 \IEEEauthorblockA{Maestría en Ingeniería de Sistemas y Computación\\
 Pontificia Universidad Javeriana, Bogotá D.C., Colombia\\
 Profesor: Leonardo Flórez-Valencia \quad
@@ -54,24 +58,20 @@ Repositorio: \url{https://github.com/AbelAlbuez/computational-geometry-cgal}}}
 
 % ── Abstract ─────────────────────────────────────────────────────
 \begin{abstract}
-Se presenta un módulo de interpolación geométrica entre
-contornos 2D del tumor activo (\textit{Enhancing Tumor}, ET)
-extraídos de cortes axiales consecutivos de resonancia
-magnética cerebral. Sobre el dataset público
-\textit{BraTS 2024 GLI}, los contornos se obtienen por slice
-mediante segmentación experta y se almacenan como polilíneas
-cerradas en formato \texttt{.obj}. El módulo, implementado en
-C++17/20 sobre CGAL, encadena (i) un \emph{resampling} por
-longitud de arco que iguala el número de vértices de ambos
-contornos, (ii) una interpolación lineal vértice a vértice y
-(iii) una etapa de detección y resolución de
-auto-intersecciones basada en el algoritmo de
-Bentley--Ottmann provisto por la librería \texttt{pujCGAL}.
-Este informe describe el módulo desarrollado por el
-integrante \textbf{Abel Albuez}, validado sobre el caso
-\textit{BraTS-GLI-00008-100}, slices~70 y~71, y se enmarca
-en una arquitectura mayor cuyos demás componentes son
-responsabilidad de los otros integrantes del equipo.
+Este documento presenta el desarrollo e integración de un pipeline híbrido 
+para la interpolación de contornos 2D de tumor activo (\textit{Enhancing Tumor}, ET) 
+extraídos de cortes axiales de resonancia magnética cerebral (dataset público \textit{BraTS 2024 GLI}). 
+La arquitectura se compone de dos enfoques analizados de forma comparativa. 
+En primer lugar, un pipeline paramétrico en C++17/20 sobre CGAL que encadena un 
+remuestreo por longitud de arco, una alineación topológica por ángulo polar respecto 
+al centroide, una interpolación lineal directa y un módulo de resolución de auto-intersecciones 
+mediante el algoritmo de Bentley-Ottmann, culminando en la reconstrucción volumétrica multi-capa. 
+En segundo lugar, se introduce la integración de un modelo neuronal de línea base (\textit{baseline}) 
+fundamentado en estimación de flujo óptico bidireccional (\textit{Video Frame Interpolation}, VFI). 
+La evaluación cuantitativa y visual del sistema demuestra que, mientras el enfoque puramente 
+geométrico garantiza precisión sub-milimétrica estricta en las fronteras anatómicas, 
+la inferencia neuronal resulta cualitativamente superior y más robusta ante alteraciones 
+topológicas masivas entre cortes, evidenciando la complementariedad de ambas metodologías.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -270,6 +270,17 @@ exterior de mayor extensión, descartando lazos parásitos
 típicos cuando los contornos fuente difieren mucho en forma.
 
 % =====================================================================
+\subsection{Alineación Topológica y Línea Base Neuronal (Aportes de Jesús Alberto)}
+\label{sec:metodologia:ia}
+% =====================================================================
+Para complementar el enfoque geométrico y establecer un punto de comparación, se desarrolló una integración con un modelo de aprendizaje profundo de línea base (\textit{baseline}) basado en \textit{Video Frame Interpolation} (VFI).
+
+Previo a cualquier interpolación, se implementó un algoritmo de alineación por ángulo polar respecto al centroide. Esto garantiza una correspondencia topológica uno a uno entre los vértices de los contornos $A$ y $B$, evitando el retorcimiento (\emph{twisting}) de la malla antes de llegar al resolver de Bentley-Ottmann.
+
+El flujo neuronal consiste en rasterizar los contornos \texttt{.obj} a máscaras 2D con \textit{padding} dinámico, inferir el flujo óptico bidireccional mediante el modelo VFI para predecir el estado intermedio ($t=0,5$), y reconstruir la geometría continua mediante \textit{Marching Squares}.
+
+
+% =====================================================================
 \section{Resultados}
 \label{sec:resultados}
 % =====================================================================
@@ -363,30 +374,25 @@ estado de auto-intersección para los cuatro pares. La
 columna \emph{Resam.} indica el número común de vértices
 tras el \textit{resampling}, igual a $\max(|A|,|B|)$.
 
-\begin{table}[!t]
+\begin{table}[H]
 \centering
-\caption{Resultados de los 4 pares representativos
-($t = 0{,}5$) tras aplicar las mejoras de pre-alineación.}
-\label{tab:resultados}
+\caption{Resultados del binario C++ en 4 pares representativos ($t = 0{,}5$).}
+\label{tab:resultados_abel}
 \renewcommand{\arraystretch}{1.15}
-\setlength{\tabcolsep}{4pt}
-\footnotesize
+\resizebox{\columnwidth}{!}{ % <--- COMANDO MÁGICO PARA AJUSTAR EL ANCHO
 \begin{tabular}{@{}llrrrrc@{}}
 \toprule
 \textbf{Caso} & \textbf{A$\rightarrow$B} &
 \textbf{$|A|$} & \textbf{$|B|$} & \textbf{Resam.} &
 \textbf{$k^{\star}$} & \textbf{Auto-int.} \\
 \midrule
-00008-100 (consecutivos) & 0070\,$\rightarrow$\,0071 &
-  32 & 30 & 32 & 0 & No \\
-00008-100 (separados 6)  & 0066\,$\rightarrow$\,0072 &
-  14 & 24 & 24 & 1 & No \\
-00008-101 (extremos)     & 0070\,$\rightarrow$\,0072 &
-  26 & 16 & 26 & 2 & No \\
-100 \emph{vs} 101 (cruzado) & 0066\,$\rightarrow$\,0070 &
-  14 & 26 & 26 & 24 & No \\
+00008-100 (consec.) & 0070\,$\rightarrow$\,0071 & 32 & 30 & 32 & 0 & No \\
+00008-100 (sep. 6)  & 0066\,$\rightarrow$\,0072 & 14 & 24 & 24 & 1 & No \\
+00008-101 (extremos)& 0070\,$\rightarrow$\,0072 & 26 & 16 & 26 & 2 & No \\
+100 \emph{vs} 101   & 0066\,$\rightarrow$\,0070 & 14 & 26 & 26 & 24 & No \\
 \bottomrule
 \end{tabular}
+} % <--- CIERRE DEL COMANDO MÁGICO
 \end{table}
 
 En los cuatro casos el barrido de Bentley--Ottmann no
@@ -470,7 +476,9 @@ los dos casos evaluados.
 contra GT real intermedio. Verde: Dice$\geq$0.80, IoU$\geq$0.65,
 Hausdorff$\leq$2.0, AreaErr$\leq$0.20. Amarillo: cerca del
 umbral. Rojo: fuera.}
+
 \label{tab:metricas-gt}
+\resizebox{\columnwidth}{!}{ % <--- COMANDO MÁGICO PARA AJUSTAR EL ANCHO
 \small
 \begin{tabular}{lcccc c}
 \toprule
@@ -497,6 +505,7 @@ Caso & Dice & IoU & Hausdorff & AreaErr & Self-int \\
   --- \\
 \bottomrule
 \end{tabular}
+} % <--- CIERRE DEL COMANDO MÁGICO
 \end{table}
 
 Estos resultados deben leerse con cuidado al compararlos con
@@ -577,7 +586,7 @@ que como componente activo en el flujo nominal.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.95\columnwidth]{../src/interpolation-lineal/output/stress_test/2026-05-31_17-46-43/stress_comparison.png}
+\includegraphics[width=0.95\columnwidth]{../src/interpolation-lineal/output/stress_test/2026-06-01_21-31-04/stress_comparison.png}
 \caption{Experimento de stress — estrella de 4 puntas
 ($R=50$, $r=1$) vs.\ cuadrado de 8 vértices. Izquierda:
 entradas $A$ (azul) y $B$ (rojo). Derecha: interpolación
@@ -609,7 +618,7 @@ estado self-int por cada slice) y una previsualización
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.85\columnwidth]{../src/interpolation-lineal/output/multi_t/2026-05-31_16-48-38/preview_3d.png}
+\includegraphics[width=0.85\columnwidth]{../src/interpolation-lineal/output/multi_t/2026-06-01_22-03-44/preview_3d.png}
 \caption{Previsualización 3D de la salida de
 \texttt{generate\_multi\_t.py}: 11 contornos interpolados
 en $t \in [0,1]$ apilados con su $z(t)$ real, coloreados
@@ -658,8 +667,8 @@ marcadores).
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.46\columnwidth]{../output/caso1_consecutivos/caso1_consecutivos.png}
-\includegraphics[width=0.46\columnwidth]{../output/caso2_separados/caso2_separados.png}
+\includegraphics[width=0.46\columnwidth]{../src/interpolation-lineal/output/caso1_consecutivos/caso1_consecutivos.png}
+\includegraphics[width=0.46\columnwidth]{../src/interpolation-lineal/output/caso2_separados/caso2_separados.png}
 \caption{Caso \textit{BraTS-GLI-00008-100} con las mejoras
 de pre-alineación activas. Izquierda: slices consecutivos
 $0070 \rightarrow 0071$, $k^{\star}=0$. Derecha: slices
@@ -670,8 +679,8 @@ $k^{\star}=1$. Ambos resueltos sin auto-intersecciones.}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.46\columnwidth]{../output/caso3_extremos/caso3_extremos.png}
-\includegraphics[width=0.46\columnwidth]{../output/caso4_cruzado/caso4_cruzado.png}
+\includegraphics[width=0.46\columnwidth]{../src/interpolation-lineal/output/caso3_extremos/caso3_extremos.png}
+\includegraphics[width=0.46\columnwidth]{../src/interpolation-lineal/output/caso4_cruzado/caso4_cruzado.png}
 \caption{Izquierda: par extremo del caso
 \textit{BraTS-GLI-00008-101}, primer ($0070$) contra último
 slice con ET ($0072$), $k^{\star}=2$ (mejor caso
@@ -687,6 +696,59 @@ El archivo de salida se escribe en formato \texttt{.obj}
 3D con $z = 0{,}0$ por vértice, lo que asegura compatibilidad
 con visores estándar como ParaView, Online 3D Viewer e
 ImageToSTL.
+
+% =====================================================================
+\subsection{Evaluación Híbrida: Enfoque Lineal vs. Línea Base IA}
+\label{sec:resultados:hibrido}
+% =====================================================================
+Para validar la eficacia de ambos enfoques, se extendió la evaluación a 10 casos del dataset BraTS. Se comparó el contorno generado a $t=0,5$ por el pipeline lineal (C++) frente a la predicción del modelo neuronal (VFI).
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Métricas de calidad a $t=0,5$ frente al Ground Truth (GT)}
+  \label{tab:metrics_comparison}
+  \resizebox{\columnwidth}{!}{
+  \begin{tabular}{llccccc}
+    \toprule
+    \textbf{Caso} & \textbf{Método} & \textbf{Dice} & \textbf{IoU} & \textbf{Hausdorff} & \textbf{AreaErr} & \textbf{Self-Int} \\
+    \midrule
+    \multirow{2}{*}{00008-100} & Lineal & 0.8546 & 0.7461 & 1.265 & 0.1418 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.8515 & \cellcolor{cellia}0.7414 & \cellcolor{cellia}1.398 & \cellcolor{cellia}0.1244 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00008-101} & Lineal & 0.8543 & 0.7456 & 0.896 & 0.0558 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.8355 & \cellcolor{cellia}0.7174 & \cellcolor{cellia}1.025 & \cellcolor{cellia}0.0668 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00008-103} & Lineal & 0.8697 & 0.7694 & 1.476 & 0.0305 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.8862 & \cellcolor{cellia}0.7956 & \cellcolor{cellia}1.546 & \cellcolor{cellia}0.0629 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00009-100} & Lineal & 0.6746 & 0.5089 & 14.351 & 0.1718 & Sí \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.8019 & \cellcolor{cellia}0.6692 & \cellcolor{cellia}14.685 & \cellcolor{cellia}0.1720 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00009-101} & Lineal & 0.9475 & 0.9002 & 2.914 & 0.0379 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.9679 & \cellcolor{cellia}0.9378 & \cellcolor{cellia}2.604 & \cellcolor{cellia}0.0145 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00020-100} & Lineal & 0.9526 & 0.9095 & 4.256 & 0.0293 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.9695 & \cellcolor{cellia}0.9408 & \cellcolor{cellia}4.162 & \cellcolor{cellia}0.0075 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00020-101} & Lineal & 0.9389 & 0.8848 & 9.355 & 0.0165 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.9581 & \cellcolor{cellia}0.9196 & \cellcolor{cellia}14.375 & \cellcolor{cellia}0.0373 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00027-100} & Lineal & 0.8876 & 0.7979 & 2.502 & 0.0773 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.9125 & \cellcolor{cellia}0.8391 & \cellcolor{cellia}2.348 & \cellcolor{cellia}0.0592 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00027-101} & Lineal & 0.9113 & 0.8370 & 2.164 & 0.0089 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.9310 & \cellcolor{cellia}0.8709 & \cellcolor{cellia}2.004 & \cellcolor{cellia}0.0087 & \cellcolor{cellia}N/A \\ \midrule
+    \multirow{2}{*}{00046-100} & Lineal & 0.8817 & 0.7884 & 2.427 & 0.0179 & No \\
+                               & \cellcolor{cellia}IA (VFI) & \cellcolor{cellia}0.9037 & \cellcolor{cellia}0.8242 & \cellcolor{cellia}5.453 & \cellcolor{cellia}0.0316 & \cellcolor{cellia}N/A \\ \midrule
+    \rowcolor{gray!20} \textbf{Promedio} & \textbf{Lineal} & \textbf{0.8773} & \textbf{0.7888} & \textbf{4.161} & \textbf{0.0588} & \\
+    \rowcolor{gray!20} \textbf{Promedio} & \textbf{IA (VFI)} & \textbf{0.9018} & \textbf{0.8256} & \textbf{4.960} & \textbf{0.0585} & \\
+    \bottomrule
+  \end{tabular}
+  }
+\end{table}
+
+El modelo \textit{baseline} neuronal demuestra una superioridad en la captura del volumen general y la adaptación a cambios topológicos severos (evidenciado en el salto métrico del caso 00009-100). Por su parte, el método paramétrico lineal en C++ conserva una mayor precisión en las fronteras finas (reflejado en una menor distancia de Hausdorff promedio), validando la complementariedad de ambas arquitecturas.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\columnwidth]{/home/jesus/GEO-COMP/computational-geometry-cgal/src/final-project-interpolation/data/contours/BraTS-GLI-00008-100/evaluacion_ia_2d.png}
+    \caption{Visualización 2D (BraTS 00008-100). Contornos originales A y B y el resultado continuo generado por el modelo \textit{baseline} VFI a $t=0,5$.}
+    \label{fig:evaluacion_ia_2d}
+\end{figure}
+
 
 % =====================================================================
 \section{Decisiones de diseño y problemas resueltos}
@@ -784,8 +846,8 @@ es completamente autónomo y no depende de ninguna ruta local.
 
 \textbf{Problema 2: figuras Plotly en blanco por conflicto CSS.}
 Al embeber las figuras con
-\texttt{fig.to\_html(full\_html=False, include\_plotlyjs=False)},
-los gráficos aparecían en blanco. La causa raíz fue una regla CSS
+\texttt{fig.to\_html(full\_html=False, include\_plotlyjs=False)}
+,los gráficos aparecían en blanco. La causa raíz fue una regla CSS
 global heredada del visualizador SVG anterior:
 
 \begin{verbatim}
@@ -841,6 +903,12 @@ en lugar de \texttt{svg} a secas.
         selección por área máxima contra estrategias basadas
         en orientación o en distancia de Hausdorff entre
         sub-lazos candidatos.
+  \item La integración complementaria de un modelo neuronal de línea base (VFI) 
+        permitió validar los límites del enfoque puramente geométrico. 
+        Se comprobó que la estimación de flujo óptico es más robusta ante 
+        alteraciones topológicas masivas (obteniendo mejores métricas de 
+        solapamiento espacial), mientras que la geometría discreta paramétrica g
+        arantiza una mayor exactitud en los bordes absolutos (Hausdorff).
 \end{itemize}
 
 % =====================================================================

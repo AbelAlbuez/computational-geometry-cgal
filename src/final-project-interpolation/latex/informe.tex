@@ -48,24 +48,26 @@ Repositorio: \url{https://github.com/AbelAlbuez/computational-geometry-cgal}}}
 
 % ── Abstract ─────────────────────────────────────────────────────
 \begin{abstract}
-Se presenta un módulo de interpolación geométrica entre
-contornos 2D del tumor activo (\textit{Enhancing Tumor}, ET)
-extraídos de cortes axiales consecutivos de resonancia
-magnética cerebral. Sobre el dataset público
-\textit{BraTS 2024 GLI}, los contornos se obtienen por slice
-mediante segmentación experta y se almacenan como polilíneas
-cerradas en formato \texttt{.obj}. El módulo, implementado en
-C++17/20 sobre CGAL, encadena (i) un \emph{resampling} por
-longitud de arco que iguala el número de vértices de ambos
-contornos, (ii) una interpolación lineal vértice a vértice y
-(iii) una etapa de detección y resolución de
-auto-intersecciones basada en el algoritmo de
-Bentley--Ottmann provisto por la librería \texttt{pujCGAL}.
-Este informe describe el módulo desarrollado por el
-integrante \textbf{Abel Albuez}, validado sobre el caso
-\textit{BraTS-GLI-00008-100}, slices~70 y~71, y se enmarca
-en una arquitectura mayor cuyos demás componentes son
-responsabilidad de los otros integrantes del equipo.
+Se presenta un pipeline completo de interpolación geométrica de
+contornos del tumor activo (\textit{Enhancing Tumor}, ET) y
+reconstrucción tridimensional, sobre el dataset público
+\textit{BraTS 2024 GLI}. A partir de los contornos 2-D extraídos por
+corte axial se implementan \textbf{tres métodos de interpolación} en
+C++17/20 sobre CGAL: (M1) lineal con correspondencia de vértices y
+resolución de auto-intersecciones mediante Bentley--Ottmann; (M2)
+spline cúbico natural a lo largo del eje $z$; y (M3) basado en forma
+mediante campos de distancia con signo (con conexión Voronoi / eje
+medio). La pila densificada se cierra en una superficie 3-D con
+reconstrucción de \emph{Poisson}, y se calculan métricas de volumen,
+área, simetría y curvatura. La calidad de la interpolación se evalúa con
+un protocolo \emph{dejar-un-corte-fuera} sobre \textbf{110 casos}
+(5\,190 cortes ocultados por método), comparando contra la verdad de
+terreno. Los métodos lineal y basado en forma resultan los más fiables
+en datos reales (Dice mediana $\approx 0{,}92$). El módulo de
+interpolación lineal y la resolución de auto-intersecciones fueron
+desarrollados por \textbf{Abel Albuez}; los métodos spline y basado en
+forma, la reconstrucción, las métricas y el visualizador completan el
+sistema del equipo.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -98,6 +100,16 @@ segmentado el tumor en slices 2D, se requiere un módulo
 geométrico que produzca slices intermedios consistentes
 ---sin auto-intersecciones--- para alimentar etapas
 posteriores de reconstrucción volumétrica.
+
+Este informe extiende dicho módulo a un \textbf{pipeline completo}:
+además de la interpolación lineal (M1), se incorporan un método por
+\emph{spline} en $z$ (M2) y uno basado en forma por campo de distancia
+(M3); la pila de contornos se cierra en 3-D con reconstrucción de
+Poisson y se valida cuantitativamente con un protocolo
+\emph{dejar-un-corte-fuera} sobre 110 casos reales. La
+Sección~\ref{sec:metodologia} detalla el módulo lineal; las
+Secciones~\ref{sec:metodos2}--\ref{sec:validacion} describen los
+métodos adicionales, la reconstrucción, las métricas y la evaluación.
 
 % =====================================================================
 \section{Marco Teórico}
@@ -264,7 +276,112 @@ exterior de mayor extensión, descartando lazos parásitos
 típicos cuando los contornos fuente difieren mucho en forma.
 
 % =====================================================================
-\section{Resultados}
+\section{Métodos adicionales de interpolación}
+\label{sec:metodos2}
+% =====================================================================
+El módulo lineal de la Sección~\ref{sec:metodologia} (en adelante
+\textbf{M1}) se complementó con dos métodos que comparten el mismo tipo
+\texttt{TContour} y kernel: un método \textbf{M2} basado en \emph{splines}
+a lo largo del eje $z$ y un método \textbf{M3} basado en forma mediante
+campos de distancia con signo.
+
+\subsection{M2 --- Spline cúbico natural / polinomial en $z$}
+\label{sec:m2}
+M1 sólo emplea dos cortes y es $C^0$ en $z$ (pila escalonada). M2 usa una
+ventana de $m\!\ge\!3$ cortes $z_0<\dots<z_{m-1}$: encadenando la
+correspondencia cíclica entre cortes consecutivos
+(Sección~\ref{sec:resultados:mejoras:rotacion}), cada índice de vértice
+$i$ traza una trayectoria $\gamma_i(z)=(x_i(z),y_i(z))$. Cada coordenada se
+ajusta de forma independiente con un \emph{spline cúbico natural} $C^2$,
+cuyas segundas derivadas $M_k$ resuelven el sistema tridiagonal
+\begin{equation}
+  h_{k-1}M_{k-1}+2(h_{k-1}+h_k)M_k+h_kM_{k+1}
+  = 6\!\left(\frac{y_{k+1}-y_k}{h_k}-\frac{y_k-y_{k-1}}{h_{k-1}}\right),
+\end{equation}
+con $h_k=z_{k+1}-z_k$ y condiciones naturales $M_0=M_{m-1}=0$, resuelto en
+$O(m)$ por el algoritmo de Thomas~\cite{herman1992}. La variante
+\emph{polinomial} ajusta por mínimos cuadrados un polinomio de grado
+$d=\min(3,m-1)$ por coordenada; se incluye como contraste didáctico, pues
+sub-ajusta u oscila en ventanas largas.
+
+\subsection{M3 --- Basado en forma (campo de distancia con signo)}
+\label{sec:m3}
+M3 no mueve vértices sino la representación implícita del contorno. Cada
+contorno se convierte en un campo de distancia con signo
+\begin{equation}
+  \Phi_C(\mathbf q)=\pm\min_{\mathbf c\in\partial C}
+  \lVert\mathbf q-\mathbf c\rVert,
+\end{equation}
+positivo dentro del tumor. La distancia se evalúa con un árbol
+\texttt{AABB} de CGAL sobre las aristas del contorno y el signo con
+\texttt{Polygon\_2::bounded\_side}. El mapa
+$\mathbf q\mapsto\min_{\mathbf c}\lVert\mathbf q-\mathbf c\rVert$ es
+exactamente la distancia al contorno: la partición del plano en regiones
+de ``arista más cercana'' es el \textbf{diagrama de Voronoi} de las
+aristas y el lugar donde el punto más cercano no es único es el
+\textbf{eje medio} de la forma~\cite{rayaudupa1990}. Los dos campos se
+mezclan linealmente y el contorno intermedio es el conjunto de nivel cero,
+extraído con \emph{marching squares}:
+\begin{equation}
+  \Phi_t=(1-t)\,\Phi_A+t\,\Phi_B,
+  \qquad C_t=\{\mathbf q:\Phi_t(\mathbf q)=0\}.
+\end{equation}
+Antes de mezclar se aplica una pre-alineación rígida (centroide y ejes
+principales). M3 es robusto a grandes desplazamientos y a cambios de
+topología, a costa de operar sobre una rejilla.
+
+% =====================================================================
+\section{Reconstrucción 3-D por superficie de Poisson}
+\label{sec:recon}
+% =====================================================================
+La pila densificada (cortes originales más los intermedios de M1/M2/M3) se
+ensambla en una nube de puntos orientada: a cada vértice $(x,y)$ del corte
+$k$ se le asigna la coordenada $(x,y,k\,\Delta z)$, con $\Delta z$ leído de
+la cabecera NIfTI. La normal exterior en el plano se obtiene girando la
+tangente unitaria $-90^\circ$ (contorno CCW); se refina con
+\texttt{jet\_estimate\_normals} y se orienta globalmente con
+\texttt{mst\_orient\_normals}. La superficie cerrada se obtiene con
+\texttt{poisson\_surface\_reconstruction\_delaunay}, que construye una
+triangulación de Delaunay 3-D del conjunto y resuelve una función
+indicadora cuyo gradiente ajusta las normales~\cite{kazhdan2006}. El
+volumen se calcula por el teorema de la divergencia,
+\begin{equation}
+  V=\tfrac{1}{6}\sum_{\triangle}\mathbf a\cdot(\mathbf b\times\mathbf c).
+\end{equation}
+La Figura~\ref{fig:recon4} muestra la superficie reconstruida por los tres
+métodos junto a la verdad de terreno (superficie por \emph{marching
+cubes}~\cite{lorensen1987} de los vóxeles segmentados).
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.24\columnwidth]{../assets/img/mesh_BraTS-GLI-00528-101_gt.png}\hfill
+\includegraphics[width=0.24\columnwidth]{../assets/img/mesh_BraTS-GLI-00528-101_linear.png}\hfill
+\includegraphics[width=0.24\columnwidth]{../assets/img/mesh_BraTS-GLI-00528-101_spline.png}\hfill
+\includegraphics[width=0.24\columnwidth]{../assets/img/mesh_BraTS-GLI-00528-101_sdf.png}
+\caption{Reconstrucción 3-D del tumor \textit{BraTS-GLI-00528-101}. De
+izquierda a derecha: verdad de terreno (vóxeles), lineal, spline y SDF. Las
+tres reconstrucciones son cerradas y reproducen la forma global; la verdad
+de terreno es más ``escalonada'' por provenir de la máscara de vóxeles.}
+\label{fig:recon4}
+\end{figure}
+
+% =====================================================================
+\section{Métricas de evaluación}
+\label{sec:metricas}
+% =====================================================================
+Sobre cada superficie se calculan: \emph{volumen} (en mm$^3$, tras
+\texttt{orient\_to\_bound\_a\_volume}) y \emph{área}; un chequeo cruzado del
+volumen por regla trapezoidal sobre las áreas \emph{shoelace} de la pila; un
+\emph{score de simetría} reflectiva (ejes principales del tensor de
+inercia, Dice volumétrico con \texttt{Side\_of\_triangle\_mesh} y Hausdorff
+simétrica contra la malla reflejada); y la \emph{curvatura media} discreta
+por Laplaciano cotangente~\cite{meyer2003} (implementada a mano, pues no
+existe en CGAL~5.6). La exactitud de la interpolación se mide con Dice
+$=\tfrac{2|X\cap Y|}{|X|+|Y|}$, IoU, Hausdorff simétrica y error relativo de
+área.
+
+% =====================================================================
+\section{Resultados cualitativos del módulo lineal (M1)}
 \label{sec:resultados}
 % =====================================================================
 
@@ -471,8 +588,12 @@ marcadores).
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.46\columnwidth]{../output/caso1_consecutivos/caso1_consecutivos.png}
-\includegraphics[width=0.46\columnwidth]{../output/caso2_separados/caso2_separados.png}
+\IfFileExists{../output/caso1_consecutivos/caso1_consecutivos.png}
+  {\includegraphics[width=0.46\columnwidth]{../output/caso1_consecutivos/caso1_consecutivos.png}}
+  {\fbox{\parbox[c][2.4cm][c]{0.44\columnwidth}{\centering\scriptsize Figura local\\(\texttt{output/}) no incluida\\en el repositorio}}}
+\IfFileExists{../output/caso2_separados/caso2_separados.png}
+  {\includegraphics[width=0.46\columnwidth]{../output/caso2_separados/caso2_separados.png}}
+  {\fbox{\parbox[c][2.4cm][c]{0.44\columnwidth}{\centering\scriptsize Figura local\\(\texttt{output/}) no incluida\\en el repositorio}}}
 \caption{Caso \textit{BraTS-GLI-00008-100} con las mejoras
 de pre-alineación activas. Izquierda: slices consecutivos
 $0070 \rightarrow 0071$, $k^{\star}=0$. Derecha: slices
@@ -483,8 +604,12 @@ $k^{\star}=1$. Ambos resueltos sin auto-intersecciones.}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.46\columnwidth]{../output/caso3_extremos/caso3_extremos.png}
-\includegraphics[width=0.46\columnwidth]{../output/caso4_cruzado/caso4_cruzado.png}
+\IfFileExists{../output/caso3_extremos/caso3_extremos.png}
+  {\includegraphics[width=0.46\columnwidth]{../output/caso3_extremos/caso3_extremos.png}}
+  {\fbox{\parbox[c][2.4cm][c]{0.44\columnwidth}{\centering\scriptsize Figura local\\(\texttt{output/}) no incluida\\en el repositorio}}}
+\IfFileExists{../output/caso4_cruzado/caso4_cruzado.png}
+  {\includegraphics[width=0.46\columnwidth]{../output/caso4_cruzado/caso4_cruzado.png}}
+  {\fbox{\parbox[c][2.4cm][c]{0.44\columnwidth}{\centering\scriptsize Figura local\\(\texttt{output/}) no incluida\\en el repositorio}}}
 \caption{Izquierda: par extremo del caso
 \textit{BraTS-GLI-00008-101}, primer ($0070$) contra último
 slice con ET ($0072$), $k^{\star}=2$ (mejor caso
@@ -500,6 +625,109 @@ El archivo de salida se escribe en formato \texttt{.obj}
 3D con $z = 0{,}0$ por vértice, lo que asegura compatibilidad
 con visores estándar como ParaView, Online 3D Viewer e
 ImageToSTL.
+
+% =====================================================================
+\section{Validación cuantitativa con datos reales}
+\label{sec:validacion}
+% =====================================================================
+
+\subsection{Protocolo \emph{dejar-un-corte-fuera}}
+Para comparar objetivamente los tres métodos se usa un protocolo de
+\emph{dejar-un-corte-fuera} (\emph{leave-one-slice-out}): para cada corte
+interior $k$ se oculta el contorno real $C_k$, se predice a partir de los
+vecinos $C_{k-1}$ y $C_{k+1}$ con cada método y se compara la predicción
+$\hat C_k$ contra $C_k$. Como las regiones de ET presentan huecos en $z$,
+el parámetro se fija por las alturas reales,
+$t=(z_k-z_{k-1})/(z_{k+1}-z_{k-1})$, descartando tríos con hueco $>3$
+cortes. Se evaluaron \textbf{110 casos} (los de mayor número de cortes ET
+entre los primeros 250 extraídos), con \textbf{5\,190 cortes} ocultados por
+método; diez tumores se reconstruyeron además en 3-D.
+
+\subsection{Exactitud de la interpolación}
+La Tabla~\ref{tab:loo} resume la exactitud agregada y las
+Figuras~\ref{fig:loo_bars}--\ref{fig:interp2d} la ilustran.
+
+\begin{table}[!t]
+\centering
+\caption{Exactitud \emph{dejar-un-corte-fuera} (110 casos,
+5\,190 cortes/método).}
+\label{tab:loo}
+\renewcommand{\arraystretch}{1.15}
+\footnotesize
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+\textbf{Método} & \textbf{Dice} & \textbf{Dice} & \textbf{\% Dice} &
+\textbf{Hausd.} & \textbf{err.\ área} \\
+ & media & mediana & $>0{,}8$ & media (mm) & mediana \\
+\midrule
+Lineal & 0{,}850 & 0{,}917 & 79{,}6\% & 4{,}30 & 0{,}037 \\
+SDF    & 0{,}834 & 0{,}924 & 76{,}6\% & 4{,}95 & 0{,}034 \\
+Spline & 0{,}821 & 0{,}899 & 73{,}9\% & 4{,}58 & 0{,}043 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.99\columnwidth]{../assets/img/loo_aggregate.png}
+\caption{Comparación de métodos: solape (Dice/IoU, mayor es mejor),
+Hausdorff media (menor es mejor) y porcentaje de cortes con Dice
+$>0{,}8$.}
+\label{fig:loo_bars}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.49\columnwidth]{../assets/img/loo_cdf.png}\hfill
+\includegraphics[width=0.49\columnwidth]{../assets/img/loo_box.png}
+\caption{Distribución de Dice por método. Izquierda: CDF empírica.
+Derecha: diagrama de caja. La mediana ($\approx 0{,}92$) supera con creces a
+la media porque una cola de cortes difíciles puntúa cerca de cero.}
+\label{fig:loo_dist}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.99\columnwidth]{../assets/img/interp_methods_BraTS-GLI-00528-101.png}
+\caption{Predicción del corte oculto (vista 2-D) para
+\textit{BraTS-GLI-00528-101}: vecinos $A$ y $B$ (gris), corte real (negro
+punteado) e interpolación de cada método. Lineal y SDF siguen de cerca el
+contorno real; el spline sobre-dispara.}
+\label{fig:interp2d}
+\end{figure}
+
+\subsection{Discusión de resultados}
+Los métodos \textbf{lineal} y \textbf{SDF} lideran (Dice mediana
+$\approx 0{,}92$, $\sim$80\,\% de cortes con Dice $>0{,}8$), mientras que el
+\textbf{spline} queda por detrás. En datos reales la forma del tumor cambia
+de manera irregular entre cortes y el ajuste suave del spline sobre-dispara;
+los métodos de dos vecinos son más robustos. Esto es lo \emph{contrario} al
+caso sintético suave, donde el spline ganaba: buena señal de que la métrica
+es sensible a la irregularidad real. La diferencia entre mediana y media
+revela una distribución sesgada: el corte típico es excelente, pero una
+minoría de cortes difíciles (extremos del tumor o regiones que se dividen)
+hunde la media.
+
+En cuanto a volumen, para tumores sólidos la razón malla/vóxel está en
+$1{,}0$--$1{,}1$ (p.\,ej.\ 00528-101: 97\,646 vs 87\,993~mm$^3$); cuando es
+mayor, Poisson rellena núcleos necróticos/anulares que la máscara de vóxeles
+deja huecos. La Figura~\ref{fig:recon2} muestra una reconstrucción limpia
+frente a su verdad de terreno.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.40\columnwidth]{../assets/img/mesh_BraTS-GLI-02066-105_gt.png}\hfill
+\includegraphics[width=0.40\columnwidth]{../assets/img/mesh_BraTS-GLI-02066-105_linear.png}
+\caption{Tumor \textit{BraTS-GLI-02066-105}: verdad de terreno (izq.) y
+reconstrucción lineal por Poisson (der.); razón de volumen $\approx 1{,}02$.}
+\label{fig:recon2}
+\end{figure}
+
+\subsection{Visualizador interactivo}
+Se desarrolló un informe HTML autocontenido (\texttt{assets/report.html})
+que combina las ecuaciones de los métodos, gráficas interactivas de métricas
+y un \textbf{selector desplegable de tumores} con las superficies 3-D
+(verdad de terreno vs.\ lineal/spline/SDF) y la tabla de métricas por caso.
 
 % =====================================================================
 \section{Decisiones de diseño y problemas resueltos}
@@ -579,6 +807,60 @@ realiza a posteriori a través del tipo común
 \texttt{TContour} y del formato \texttt{.obj}, ambos
 estables y bien definidos.
 
+\subsection{Entorno CGAL 5.6 y dependencias}
+\label{sec:decisiones:cgal56}
+El proyecto se compila contra CGAL~5.6 (no 6.x), por lo que se usa
+\texttt{CGAL::AABB\_traits} (no \texttt{AABB\_traits\_3}) y, al no existir
+\texttt{interpolated\_corrected\_curvatures}, la curvatura media se
+implementó a mano. Eigen ---requerido por Poisson y
+\texttt{jet\_estimate\_normals}--- no estaba instalado ni había
+\texttt{sudo}: al ser \emph{header-only} se incorporó como usuario y se
+apuntó CMake con \texttt{-DEIGEN3\_INCLUDE\_DIR}. Además,
+\texttt{pujCGAL/SegmentsIntersection.hxx} usaba \texttt{std::get\_if} sobre
+lo que en 5.6 es un \texttt{boost::variant}; se hizo portable según
+\texttt{CGAL\_VERSION\_NR} (\texttt{boost::get} en 5.x,
+\texttt{std::get\_if} en $\ge$6.0).
+
+\subsection{Convención de etiquetas BraTS}
+\label{sec:decisiones:etiquetas}
+El tumor activo es la etiqueta~3, pero los primeros casos están
+post-tratamiento (sólo etiquetas 2 y 4) y casi no tienen ET; la extracción no
+producía contornos. El estudio selecciona los casos con más cortes de ET
+reales.
+
+\subsection{Colapso de la reconstrucción y su solución}
+\label{sec:decisiones:colapso}
+En pilas de anillos irregulares, \texttt{mst\_orient\_normals} descartaba la
+mayoría de los puntos y la malla de Poisson colapsaba (un caso pasó de
+$387$ a $32\,957$~mm$^3$ tras corregirlo). La solución fue \emph{no}
+descartar esos puntos, sino asignarles como respaldo la normal exterior en
+el plano del contorno, fiable en la superficie lateral.
+
+\subsection{Tumores muy pequeños (modo de fallo)}
+\label{sec:decisiones:pequenos}
+Tumores de pocos miles de mm$^3$ tienen contornos demasiado escasos para una
+superficie de Poisson estable y se reconstruyen incompletos
+(Figura~\ref{fig:fallo}); se documentan como modo de fallo honesto.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.40\columnwidth]{../assets/img/mesh_BraTS-GLI-02093-101_gt.png}\hfill
+\includegraphics[width=0.40\columnwidth]{../assets/img/mesh_BraTS-GLI-02093-101_linear.png}
+\caption{Modo de fallo en un tumor muy pequeño
+\textit{BraTS-GLI-02093-101}: la verdad de terreno (izq.) es válida, pero la
+reconstrucción lineal (der.) colapsa a un fragmento
+($\sim$254 vs 3\,793~mm$^3$): los contornos son demasiado escasos para
+Poisson.}
+\label{fig:fallo}
+\end{figure}
+
+\subsection{Escalabilidad}
+\label{sec:decisiones:escala}
+La validación lanza el binario una vez por corte: los 1\,350 casos serían
+horas, por lo que el estudio (110 casos) se ejecutó en segundo plano; el
+dataset completo requeriría una validación en proceso, sin subproceso por
+corte.
+
 % =====================================================================
 \section{Conclusiones Parciales}
 \label{sec:conclusiones}
@@ -610,6 +892,19 @@ estables y bien definidos.
         selección por área máxima contra estrategias basadas
         en orientación o en distancia de Hausdorff entre
         sub-lazos candidatos.
+  \item Se integraron tres métodos de interpolación (lineal, spline y
+        basado en forma) con reconstrucción 3-D por Poisson y un módulo de
+        métricas, validados con un protocolo \emph{dejar-un-corte-fuera}
+        sobre 110 casos reales de BraTS.
+  \item En datos reales, la interpolación \textbf{lineal} y la basada en
+        \textbf{forma} (SDF) son las más fiables (Dice mediana
+        $\approx 0{,}92$); el \textbf{spline} sobre-dispara ante cambios
+        bruscos de forma. Las reconstrucciones son cerradas y su volumen
+        coincide con la verdad de terreno salvo en tumores muy pequeños.
+  \item Un visualizador HTML interactivo (selector de tumor, gráficas y
+        superficies 3-D) acompaña al informe. Como trabajo futuro se plantea
+        una validación en proceso para todo el dataset y el manejo de
+        multifocalidad (varios contornos por corte).
 \end{itemize}
 
 % =====================================================================
@@ -634,6 +929,26 @@ self-intersecting polygons using minimal memory,''
 \bibitem{baid2021brats} U.~Baid \textit{et al.}, ``The RSNA-ASNR-MICCAI
 BraTS 2021 benchmark on brain tumor segmentation and
 radiogenomic classification,'' \textit{arXiv:2107.02314}, 2021.
+
+\bibitem{kazhdan2006} M.~Kazhdan, M.~Bolitho, and H.~Hoppe,
+``Poisson surface reconstruction,'' in \textit{Proc. Eurographics
+Symposium on Geometry Processing}, 2006, pp.~61--70.
+
+\bibitem{lorensen1987} W.~E.~Lorensen and H.~E.~Cline, ``Marching cubes:
+A high resolution 3D surface construction algorithm,'' \textit{ACM SIGGRAPH
+Computer Graphics}, vol.~21, no.~4, pp.~163--169, 1987.
+
+\bibitem{meyer2003} M.~Meyer, M.~Desbrun, P.~Schr\"oder, and A.~H.~Barr,
+``Discrete differential-geometry operators for triangulated 2-manifolds,''
+in \textit{Visualization and Mathematics III}, 2003, pp.~35--57.
+
+\bibitem{rayaudupa1990} S.~P.~Raya and J.~K.~Udupa, ``Shape-based
+interpolation of multidimensional objects,'' \textit{IEEE Transactions on
+Medical Imaging}, vol.~9, no.~1, pp.~32--42, 1990.
+
+\bibitem{herman1992} G.~T.~Herman, J.~Zheng, and C.~A.~Bucholtz,
+``Shape-based interpolation,'' \textit{IEEE Computer Graphics and
+Applications}, vol.~12, no.~3, pp.~69--79, 1992.
 
 \end{thebibliography}
 

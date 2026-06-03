@@ -16,7 +16,7 @@ fi
 
 cd "$LATEX_DIR"
 for i in 1 2 3; do
-  pdflatex -interaction=nonstopmode -halt-on-error=false informe.tex >/dev/null
+  pdflatex -interaction=nonstopmode informe.tex >/dev/null || true
 done
 pdflatex -interaction=nonstopmode informe.tex | tail -3
 ls -la informe.pdf

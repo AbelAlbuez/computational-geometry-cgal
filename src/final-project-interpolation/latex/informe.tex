@@ -128,14 +128,18 @@ restringido al caso $|A| = |B|$ (igualando los vértices mediante
 vértices correspondientes.
 
 \subsection{Interpolación en imágenes médicas}
-Meijster y Roerdink~\cite{meijster1999} comparan métodos de
-interpolación (vecino más cercano, lineal, cúbica, basada en
-forma) en el contexto de procesamiento de imágenes médicas.
-Concluyen que la interpolación lineal por vértices ofrece una
-relación calidad/complejidad adecuada para contornos densamente
-muestreados, justificando su uso como \textit{baseline} en este
-módulo antes de considerar variantes basadas en forma o en
-transformadas de distancia.
+Lehmann \textit{et al.}~\cite{lehmann1999} presentan un estudio
+comparativo de métodos de interpolación de \emph{intensidad} en
+imágenes médicas (vecino más cercano, lineal, B-splines, cúbica,
+Lagrange, entre otros), concluyendo que los B-splines de alto grado
+ofrecen el menor error de interpolación. Conviene distinguir ese
+problema ---la interpolación de valores de intensidad entre vóxeles---
+de la interpolación de \emph{contornos/forma} que aborda este trabajo,
+para la cual las referencias son los métodos basados en forma
+(Sección~\ref{sec:m3})~\cite{rayaudupa1990,herman1992}. La
+interpolación lineal por vértices se adopta aquí como \textit{baseline}
+por su simplicidad y bajo costo, antes de considerar las variantes
+basadas en spline (M2) y en forma (M3).
 
 \subsection{Polígonos auto-intersecantes}
 Souviron~\cite{souviron2013} presenta un esquema de detección
@@ -228,7 +232,7 @@ circular:
   \qquad i = 0,\dots,n-1.
 \end{equation}
 A continuación se invoca el algoritmo de barrido
-Bentley--Ottmann~\cite{souviron2013} provisto por
+Bentley--Ottmann~\cite{bentley1979} provisto por
 \texttt{pujCGAL}:
 
 \begin{lstlisting}[caption={Invocación del barrido
@@ -306,7 +310,8 @@ sub-ajusta u oscila en ventanas largas.
 
 \subsection{M3 --- Basado en forma (campo de distancia con signo)}
 \label{sec:m3}
-M3 no mueve vértices sino la representación implícita del contorno. Cada
+M3 no mueve vértices sino la representación implícita del contorno, en la
+línea de la interpolación basada en forma~\cite{rayaudupa1990}. Cada
 contorno se convierte en un campo de distancia con signo
 \begin{equation}
   \Phi_C(\mathbf q)=\pm\min_{\mathbf c\in\partial C}
@@ -319,7 +324,7 @@ $\mathbf q\mapsto\min_{\mathbf c}\lVert\mathbf q-\mathbf c\rVert$ es
 exactamente la distancia al contorno: la partición del plano en regiones
 de ``arista más cercana'' es el \textbf{diagrama de Voronoi} de las
 aristas y el lugar donde el punto más cercano no es único es el
-\textbf{eje medio} de la forma~\cite{rayaudupa1990}. Los dos campos se
+\textbf{eje medio} de la forma~\cite{blum1967}. Los dos campos se
 mezclan linealmente y el contorno intermedio es el conjunto de nivel cero,
 extraído con \emph{marching squares}:
 \begin{equation}
@@ -709,7 +714,8 @@ minoría de cortes difíciles (extremos del tumor o regiones que se dividen)
 hunde la media.
 
 En cuanto a volumen, para tumores sólidos la razón malla/vóxel está en
-$1{,}0$--$1{,}1$ (p.\,ej.\ 00528-101: 97\,646 vs 87\,993~mm$^3$); cuando es
+$1{,}0$--$1{,}15$ (p.\,ej.\ 00528-101: 97\,646 vs 87\,993~mm$^3$, razón
+$1{,}11$); cuando es
 mayor, Poisson rellena núcleos necróticos/anulares que la máscara de vóxeles
 deja huecos. La Figura~\ref{fig:recon2} muestra una reconstrucción limpia
 frente a su verdad de terreno.
@@ -770,11 +776,14 @@ transformaciones posteriores.
 Durante el desarrollo se ejecutó un barrido amplio de
 \textbf{94 pares} de slices (consecutivos, separados,
 extremos y cruzados entre casos), sin detectar ninguna
-auto-intersección. El análisis geométrico indica que los
-contornos ET de BraTS son aproximadamente convexos y
-morfológicamente suaves: el promedio ponderado de dos
-contornos convexos alineados por longitud de arco tiende a
-producir un contorno simple. Las tres mejoras de
+auto-intersección. El análisis geométrico indica que,
+\emph{en los pares evaluados}, los contornos ET resultaron
+aproximadamente convexos y morfológicamente suaves: el promedio
+ponderado de dos contornos convexos alineados por longitud de arco
+tiende a producir un contorno simple. No obstante, el tumor realzante
+puede presentar formas anulares o irregulares, por lo que esta
+observación se limita al conjunto probado y no se generaliza a todo el
+dataset. Las tres mejoras de
 pre-alineación descritas en
 Sección~\ref{sec:resultados:mejoras} (normalización CCW,
 alineación por centroide y rotación óptima del punto de
@@ -799,8 +808,12 @@ cruces.
 El módulo se diseñó para correr directamente sobre los
 \texttt{.obj} extraídos de BraTS, sin depender del output de
 los otros integrantes del equipo (Jesús: correspondencia de
-vértices por ángulo polar; Santiago: reconstrucción 3D con
-VTK). Esta decisión reduce el riesgo de integración y
+vértices por ángulo polar; Santiago: reconstrucción 3-D). La
+reconstrucción 3-D presentada en este informe
+(Sección~\ref{sec:recon}) se realiza con CGAL
+(\texttt{poisson\_surface\_reconstruction\_delaunay}); una versión
+preliminar del plan contemplaba VTK, finalmente no utilizada. Esta
+decisión reduce el riesgo de integración y
 permite validar el componente de Abel en cualquier momento
 sin coordinación con el resto del equipo. La integración se
 realiza a posteriori a través del tipo común
@@ -910,17 +923,17 @@ corte.
 % =====================================================================
 % ── Referencias ──────────────────────────────────────────────────
 % =====================================================================
-\begin{thebibliography}{9}
+\begin{thebibliography}{11}
 
 \bibitem{barequet1996} G.~Barequet and M.~Sharir,
 ``Piecewise-linear interpolation between polygonal slices,''
 \textit{Computer Vision and Image Understanding},
 vol.~63, no.~2, pp.~251--272, 1996.
 
-\bibitem{meijster1999} A.~Meijster and J.~B.~T.~M.~Roerdink,
-``A survey of interpolation methods in medical image
-processing,'' \textit{IEEE Transactions on Medical Imaging},
-1999.
+\bibitem{lehmann1999} T.~M.~Lehmann, C.~G\"onner, and K.~Spitzer,
+``Survey: interpolation methods in medical image processing,''
+\textit{IEEE Transactions on Medical Imaging}, vol.~18, no.~11,
+pp.~1049--1075, 1999.
 
 \bibitem{souviron2013} J.~Souviron, ``Correcting
 self-intersecting polygons using minimal memory,''
@@ -949,6 +962,15 @@ Medical Imaging}, vol.~9, no.~1, pp.~32--42, 1990.
 \bibitem{herman1992} G.~T.~Herman, J.~Zheng, and C.~A.~Bucholtz,
 ``Shape-based interpolation,'' \textit{IEEE Computer Graphics and
 Applications}, vol.~12, no.~3, pp.~69--79, 1992.
+
+\bibitem{bentley1979} J.~L.~Bentley and T.~A.~Ottmann, ``Algorithms
+for reporting and counting geometric intersections,'' \textit{IEEE
+Transactions on Computers}, vol.~C-28, no.~9, pp.~643--647, 1979.
+
+\bibitem{blum1967} H.~Blum, ``A transformation for extracting new
+descriptors of shape,'' in \textit{Models for the Perception of Speech
+and Visual Form}, W.~Wathen-Dunn, Ed.\quad Cambridge, MA: MIT Press,
+1967, pp.~362--380.
 
 \end{thebibliography}
 
